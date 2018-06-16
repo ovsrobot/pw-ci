@@ -1,0 +1,98 @@
+#!/bin/sh
+# SPDX-Identifier: gpl-2.0-or-later
+# Copyright (C) 2018, Red Hat, Inc.
+#
+# Monitors a project on a patchwork instance for new series submissions
+# Records the submissions in the series database (and emits them on the
+# stdout line for processing)
+#
+# Licensed under the terms of the GNU General Public License as published
+# by the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.  You may obtain a copy of the
+# license at
+#
+#    https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[ -f "${HOME}/.pwmon-rc" ] && source "${HOME}/.pwmon-rc"
+
+if [ "$1" != "" ]; then
+    pw_project="$1"
+fi
+
+if [ "X$pw_instance" == "X" -o "X$pw_project" == "X" ]; then
+   echo "ERROR: Patchwork instance and project are unset."
+   echo "Please setup ${HOME}/.pwmon-rc and set pw_project "
+   echo "(or pass it as an argument)."
+   exit 1
+fi
+
+userpw=""
+
+if [ "X$pw_credential" != "X" ]; then
+   userpw="-u \"${pw_credential}\""
+fi
+
+source $(dirname $0)/series_db_lib.sh
+
+function emit_series() {
+
+    project="$1"
+    id="$2"
+    url="$3"
+    submitter_name="$4"
+    submitter_email="$5"
+
+    if ! series_id_exists "${id}"; then
+        echo "============================================="
+        echo "Series id: $id"
+        echo "Series url: $url"
+        echo "submitter: $submitter_name <$submitter_email>"
+        echo "recording series (${id}, \"${url}\", \"${submitter_name}\", \"${submitter_email}\")"
+        echo
+
+        series_db_add_false "$project" "$id" "$url" "$submitter_name" "$submitter_email"
+    fi
+}
+
+function check_new_series() {
+
+    local PROJECT="$1"
+
+    if [ "$PROJECT" == "" ]; then
+        echo "ERR: need a project"
+        exit 1
+    fi
+
+    if [ ! -e "${HOME}/.pwmon-${PROJECT}-series" ]; then
+        echo "WARN: PW-series doesn't exist..."
+        echo "      Re-running with patches since yesterday"
+        TRY_DATE=$(date --date="yesterday" '+%F %T')
+        STAMP_DATE=$(date --date="$TRY_DATE + 1 day")
+    else
+        TRY_DATE=$(stat "${HOME}/.pwmon-${PROJECT}-series" | grep Modify | cut -d" " -f2-3 | cut -d. -f1)
+        STAMP_DATE=$(date)
+    fi
+
+    SINCE=$(echo $TRY_DATE | sed 's@ @%20@')
+    STAMP=$(date --date="$STAMP_DATE" '+%C%y%m%d%H%M')
+
+    GET_URL="http://${pw_instance}/api/1.0/series/?project=${PROJECT}&since=${SINCE}"
+
+    response=$(curl -s "$userpw" "$GET_URL")
+
+    series_info=$(echo "$response" | jq -rc '.[] | (.id|tostring) + ";" + .url + ";" + .submitter.name + ";" + .submitter.email')
+
+    echo "$series_info" | while IFS=\; read -r id url submitter_name submitter_email; do
+        emit_series "${PROJECT}" "$id" "$url" "$submitter_name" "$submitter_email"
+    done
+
+    touch -m -t "${STAMP}" "${HOME}/.pwmon-${PROJECT}-series"
+}
+
+check_new_series "$pw_project"
