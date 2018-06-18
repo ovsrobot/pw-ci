@@ -63,3 +63,22 @@ function series_id_exists() {
 
     return 1
 }
+
+function get_unsubmitted_jobs_as_line() {
+    project="$1"
+
+    series_db_exists
+
+    echo "select series_id,series_url,series_submitter,series_email from series where series_project=\"$project\" and series_submitted=\"false\";" | series_db_execute
+}
+
+function series_id_set_submitted() {
+    id="$1"
+
+    if ! series_id_exists "$id"; then
+        return 0
+    fi
+    
+    echo "update series set series_submitted=\"true\" where series_id=$id;" | series_db_execute
+    return 0
+}
