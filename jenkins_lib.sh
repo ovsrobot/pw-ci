@@ -77,7 +77,7 @@ function jenkins_submit_series() {
             VAL=$(ci_get_variable "$pre_sub_val")
 
             json_data="${json_data}"'
-                {"name":"'"$NAME"'", "value":"'"${!VAL}"'"},'
+                {"name":"'"$NAME"'", "value":"'"${VAL}"'"},'
         fi
     done
 

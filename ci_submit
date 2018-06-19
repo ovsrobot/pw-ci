@@ -64,13 +64,13 @@ function ci_get_variable() {
     local value_var="$1"
 
     if [ "$value_var" == "series_id" ]; then
-        echo "id"
+        echo "${id}"
     elif [ "$value_var" == "series_url" ]; then
-        echo "url"
+        echo "${url}"
     elif [ "$value_var" == "series_submitter_name" ]; then
-        echo "submitter_name"
+        echo "${submitter_name}"
     elif [ "$value_var" == "series_submitter_email" ]; then
-        echo "submitter_email"
+        echo "${submitter_email}"
     else
         echo "$value_var"
     fi
