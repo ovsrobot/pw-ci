@@ -116,9 +116,21 @@ git config sendemail.smtpserverport &quot;$SMTP_SERVERPORT&quot;
 git config sendemail.smtpencryption &quot;$SMTP_ENCRYPTION&quot;
 
 I=0
-for patch in $(curl -s -f &quot;$SERIES_URL&quot; | egrep -o &apos;&quot;url&quot;:&quot;[a-zA-Z0-9:/.-]+/patches/[0-9]+/&apos; | tr -d \&quot; | sed s@^url:@@); do
-    patch_mbox=$(curl -s -f &quot;${patch}&quot; | egrep -o &apos;&quot;mbox&quot;:&quot;[a-zA-Z0-9:/.-]+&quot;,&apos; | tr -d \&quot; | sed -e &apos;s@mbox:@@&apos; -e &apos;s@,$@@&apos;)
-    curl -s &quot;$patch_mbox&quot; -o $(printf %04d $I).patch
+
+SERIES_JSON=$(curl -s -f &quot;$SERIES_URL&quot;)
+
+COVER_LETTER_URL=$(echo &quot;$SERIES_JSON&quot; | jq -rc &apos;.cover_letter.url&apos;)
+if [ &quot;$COVER_LETTER_URL&quot; != &quot;null&quot; ]; then
+	    COVER_LETTER_MBOX=$(curl -s -f &quot;$COVER_LETTER_URL&quot; | jq -rc &apos;.mbox&apos;)
+        COVER_LETTER_NAME=$(curl -s -f &quot;$COVER_LETTER_URL&quot; | jq -rc &apos;.name&apos;)
+        curl -s -f &quot;$COVER_LETTER_MBOX&quot; &gt; &quot;${COVER_LETTER_NAME}.coverletter&quot;
+fi
+
+for patch in $(echo &quot;$SERIES_JSON}&quot; | jq -rc &apos;.patches[].url&apos;); do
+    patch_json=$(curl -s -f &quot;${patch}&quot;)
+    patch_mbox=$(echo &quot;${patch_json}&quot; | jq -rc &apos;.mbox&apos;)
+    patch_subject=$(echo &quot;${patch_json}&quot; | jq -rc &apos;.name&apos;)
+    curl -s &quot;$patch_mbox&quot; -o &quot;$(printf %04d $I)-${patch_subject}.patch&quot;
     I=$((I+1))
 done
 </command>
@@ -132,10 +144,26 @@ Date: $(date +&quot;%a, %e %b %Y %T %::z&quot;)&quot; &gt; tmp.email.txt
 IFS=&quot;$OLD_IFS&quot;
 
 for patch in *.patch; do
+   PATCH_SUBJECT=$(echo &quot;$patch&quot; | sed -E -e &apos;s,^([0-9]+)-,,&apos; -e &apos;s,.patch$,,&apos;)
    ERRORS=&apos;&apos;
 
-   # for each patch - first check it for patch issues
-   ./utilities/checkpatch.py $patch 2&gt;&amp;1 | tee tmp.checkpatch.log
+   # for each patch
+   
+   # apply it
+   git am -q -3 &quot;$patch&quot; 2&gt;&amp;1 | tee tmp.gitam.log
+   if egrep -i &apos;(warn|err)&apos; tmp.gitam.log &gt;/dev/null 2&gt;&amp;1; then
+      IFS=&apos;&apos;
+      ERRORS=&quot;$ERRORS
+
+git-am:
+$(cat tmp.gitam.log)
+&quot;
+      IFS=&quot;$OLD_IFS&quot;
+   fi
+   #rm tmp.gitam.log
+
+   # check it for patch issues
+   ./utilities/checkpatch.py -1 2&gt;&amp;1 | tee tmp.checkpatch.log
    if egrep -i &apos;(warn|err)&apos; tmp.checkpatch.log &gt;/dev/null 2&gt;&amp;1; then
       IFS=&apos;&apos;
       ERRORS=&quot;$ERRORS
@@ -147,22 +175,9 @@ $(cat tmp.checkpatch.log)
    fi
    rm tmp.checkpatch.log
 
-   # now apply it
-   git am -3 $patch 2&gt;&amp;1 | tee tmp.gitam.log
-   if egrep -i &apos;(warn|err)&apos; tmp.gitam.log &gt;/dev/null 2&gt;&amp;1; then
-      IFS=&apos;&apos;
-      ERRORS=&quot;$ERRORS
-
-git-am:
-$(cat tmp.gitam.log)
-&quot;
-      IFS=&quot;$OLD_IFS&quot;
-   fi
-   rm tmp.gitam.log
-
    # now configure the system
-   (./boot.sh &amp;&amp; ./configure &amp;&amp; make CFLAGS:=&quot;$(CFLAGS) -Werror&quot;) | tee tmp.build.log
-   if egrep &apos;^([a-zA-Z0-9/:.-]+) error:&apos; &gt;/dev/null 2&gt;&amp;1; then
+   (./boot.sh &amp;&amp; ./configure &amp;&amp; make CFLAGS:=&quot;$(CFLAGS) -Werror&quot;) 2&gt;&amp;1 | tee tmp.build.log
+   if egrep &apos;^(make: \*\*\* \[all\] Error)&apos; tmp.build.log &gt;/dev/null 2&gt;&amp;1; then
       IFS=&apos;&apos;
       ERRORS=&quot;$ERRORS
 
@@ -171,17 +186,16 @@ $(tail -n25 tmp.build.log)
 &quot;
       IFS=&quot;$OLD_IFS&quot;
    fi
-   rm tmp.build.log
+   # rm tmp.build.log
 
    if [ &quot;X$ERRORS&quot; != &quot;X&quot; ]; then
       cp tmp.email.txt email.txt
-      echo &quot;Subject: Automated robotic reply.  Re: ...&quot; &gt;&gt; email.txt
+      echo &quot;Subject: Automated robotic reply.  Re: ${PATCH_SUBJECT}&quot; &gt;&gt; email.txt
       MSG_ID=$(grep &apos;Message-Id:&apos; &quot;$patch&quot; | cut -d: -f2)
       echo &quot;In-Reply-To: $MSG_ID&quot; &gt;&gt; email.txt
       echo &quot;References: $MSG_ID&quot; &gt;&gt; email.txt
       echo &quot;&quot; &gt;&gt; email.txt
-      echo &quot;Bleep bloop.  Greetings $SUBMITTER, I am a robot and I have tried out your patch&quot; &gt;&gt; email.txt
-      echo &quot;with message ID $MSG_ID&quot; &gt;&gt; email.txt
+      echo &quot;Bleep bloop.  Greetings $SUBMITTER, I am a robot and I have tried out your patch.&quot; &gt;&gt; email.txt
       echo &quot;Thanks for your contribution.&quot; &gt;&gt; email.txt
       echo &quot;&quot; &gt;&gt; email.txt
       echo &quot;I encountered some error that I wasn&apos;t expecting.  See the details below.&quot; &gt;&gt; email.txt
@@ -189,7 +203,7 @@ $(tail -n25 tmp.build.log)
       echo &quot;$ERRORS&quot; &gt;&gt; email.txt
       IFS=&quot;$OLD_IFS&quot;
       echo &quot;&quot; &gt;&gt; email.txt
-      echo &quot;Please check this out.  If you feel there has been an error, please email me back.&quot; &gt;&gt; email.txt
+      echo &quot;Please check this out.  If you feel there has been an error, please email aconole@bytheb.org&quot; &gt;&gt; email.txt
       echo &quot;&quot; &gt;&gt; email.txt
       echo &quot;Thanks,&quot; &gt;&gt; email.txt
       echo &quot;0-day Robot&quot; &gt;&gt; email.txt
@@ -200,8 +214,42 @@ done
 </command>
     </hudson.tasks.Shell>
     <hudson.tasks.Shell>
-      <command># Re-enable this after some development time.
-# make check TESTSUITEFLAGS=&apos;-j4 -k !cluster&apos; RECHECK=yes &lt;/dev/null 2&gt;&amp;1 | tee tmp.check.log
+      <command>OLD_IFS=&quot;$IFS&quot;
+# Re-enable this after some development time.
+make distcheck TESTSUITEFLAGS=&apos;-j4 -k !cluster&apos; RECHECK=yes 2&gt;&amp;1 | tee tmp.check.log
+
+patch=0000-*.patch
+if [ -f &quot;*.coverletter&quot; ]; then
+   patch=*.coverletter
+fi
+
+PATCH_SUBJECT=$(echo &quot;$patch&quot; | sed -E -e &apos;s,^([0-9]+)-,,&apos; -e &apos;s,.patch$,,&apos; -e &apos;s,.coverletter$,,&apos;)
+
+if ! egrep &apos;archives ready for distribution:\s*$&apos; tmp.check.log &gt;/dev/null 2&gt;&amp;1; then
+      ERRORS=$(tail -n50 tmp.check.log)
+      cp tmp.email.txt email.txt
+      echo &quot;Subject: Automated robotic reply.  Re: ${PATCH_SUBJECT}&quot; &gt;&gt; email.txt
+      MSG_ID=$(grep &apos;Message-Id:&apos; &quot;$patch&quot; | cut -d: -f2)
+      echo &quot;In-Reply-To: $MSG_ID&quot; &gt;&gt; email.txt
+      echo &quot;References: $MSG_ID&quot; &gt;&gt; email.txt
+      echo &quot;&quot; &gt;&gt; email.txt
+      echo &quot;Bleep bloop.  Greetings $SUBMITTER, I am a robot and I have tried out your patch&quot; &gt;&gt; email.txt
+      echo &quot;with message ID $MSG_ID&quot; &gt;&gt; email.txt
+      echo &quot;Thanks for your contribution.&quot; &gt;&gt; email.txt
+      echo &quot;&quot; &gt;&gt; email.txt
+      echo &quot;I encountered a &apos;make distcheck&apos; failure. See the details below.&quot; &gt;&gt; email.txt
+      IFS=&apos;&apos;
+      echo &quot;$ERRORS&quot; &gt;&gt; email.txt
+      IFS=&quot;$OLD_IFS&quot;
+      echo &quot;&quot; &gt;&gt; email.txt
+      echo &quot;&quot; &gt;&gt; email.txt
+      echo &quot;Please check this out.  If you feel there has been an error, please email aconole@bytheb.org&quot; &gt;&gt; email.txt
+      echo &quot;&quot; &gt;&gt; email.txt
+      echo &quot;Thanks,&quot; &gt;&gt; email.txt
+      echo &quot;0-day Robot&quot; &gt;&gt; email.txt
+
+      git send-email --suppress-from --cc=&quot;dev@openvswitch.org&quot; email.txt
+fi
 </command>
     </hudson.tasks.Shell>
   </builders>
