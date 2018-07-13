@@ -102,10 +102,9 @@
   <triggers/>
   <concurrentBuild>false</concurrentBuild>
   <builders>
+
     <hudson.tasks.Shell>
       <command># this gets all the patches
-
-set -e
 
 git config user.name &quot;0-day Robot&quot;
 git config user.email &quot;$ROBO_EMAIL&quot;
@@ -122,14 +121,20 @@ SERIES_JSON=$(curl -s -f &quot;$SERIES_URL&quot;)
 COVER_LETTER_URL=$(echo &quot;$SERIES_JSON&quot; | jq -rc &apos;.cover_letter.url&apos;)
 if [ &quot;$COVER_LETTER_URL&quot; != &quot;null&quot; ]; then
 	    COVER_LETTER_MBOX=$(curl -s -f &quot;$COVER_LETTER_URL&quot; | jq -rc &apos;.mbox&apos;)
-        COVER_LETTER_NAME=$(curl -s -f &quot;$COVER_LETTER_URL&quot; | jq -rc &apos;.name&apos;)
-        curl -s -f &quot;$COVER_LETTER_MBOX&quot; &gt; &quot;${COVER_LETTER_NAME}.coverletter&quot;
+        COVER_LETTER_NAME=$(curl -s -f &quot;$COVER_LETTER_URL&quot; | jq -rc &apos;.name&apos; | sed &apos;s@/@ of @&apos;)
+        curl -s -f &quot;$COVER_LETTER_MBOX&quot; -o &quot;${COVER_LETTER_NAME}.coverletter&quot;
 fi
 
 for patch in $(echo &quot;$SERIES_JSON}&quot; | jq -rc &apos;.patches[].url&apos;); do
     patch_json=$(curl -s -f &quot;${patch}&quot;)
     patch_mbox=$(echo &quot;${patch_json}&quot; | jq -rc &apos;.mbox&apos;)
-    patch_subject=$(echo &quot;${patch_json}&quot; | jq -rc &apos;.name&apos;)
+    patch_subject=$(echo &quot;${patch_json}&quot; | jq -rc &apos;.name&apos; | sed &apos;s@/@ of @&apos;)
+    if echo $patch_subject | grep -o &apos;, RFC,&apos; &gt;/dev/null 2&gt;&amp;1; then
+        touch skip.done
+    fi
+    if echo $patch_subject | egrep -o &apos;branch-[0-9]+\.[0-9]+&apos; &gt;/dev/null 2&gt;&amp;1; then
+        git checkout $(echo &quot;$patch_subject&quot; | egrep -o &apos;branch-[0-9]+\.[0-9]+&apos;)
+    fi
     curl -s &quot;$patch_mbox&quot; -o &quot;$(printf %04d $I)-${patch_subject}.patch&quot;
     I=$((I+1))
 done
@@ -143,54 +148,68 @@ To: $SUBMITTER &lt;$SUBMITTER_EMAIL&gt;
 Date: $(date +&quot;%a, %e %b %Y %T %::z&quot;)&quot; &gt; tmp.email.txt
 IFS=&quot;$OLD_IFS&quot;
 
+if [ -f skip.done ]; then
+   exit 0
+fi
+
 for patch in *.patch; do
    PATCH_SUBJECT=$(echo &quot;$patch&quot; | sed -E -e &apos;s,^([0-9]+)-,,&apos; -e &apos;s,.patch$,,&apos;)
    ERRORS=&apos;&apos;
 
    # for each patch
    
+   # is it a x-post kernel patch
+   if egrep -- &apos;--- a/net&apos; &quot;$patch&quot; &gt;/dev/null 2&gt;&amp;1; then    
+       echo &quot;Skip this patch&quot; &gt; skip.done
+       exit 0
+   fi
+
    # apply it
    git am -q -3 &quot;$patch&quot; 2&gt;&amp;1 | tee tmp.gitam.log
-   if egrep -i &apos;(warn|err)&apos; tmp.gitam.log &gt;/dev/null 2&gt;&amp;1; then
-      IFS=&apos;&apos;
-      ERRORS=&quot;$ERRORS
+   if egrep -i &apos;(warn|err|Patch failed)&apos; tmp.gitam.log &gt;/dev/null 2&gt;&amp;1; then
+       IFS=&apos;&apos;
+       ERRORS=&quot;$ERRORS
 
 git-am:
 $(cat tmp.gitam.log)
 &quot;
-      IFS=&quot;$OLD_IFS&quot;
+       IFS=&quot;$OLD_IFS&quot;
+       echo &quot;Skip this patch&quot; &gt; skip.done
    fi
-   #rm tmp.gitam.log
+   rm tmp.gitam.log
 
-   # check it for patch issues
-   ./utilities/checkpatch.py -1 2&gt;&amp;1 | tee tmp.checkpatch.log
-   if egrep -i &apos;(warn|err)&apos; tmp.checkpatch.log &gt;/dev/null 2&gt;&amp;1; then
-      IFS=&apos;&apos;
-      ERRORS=&quot;$ERRORS
+   if [ ! -f skip.done ]; then
+       # check it for patch issues
+       ./utilities/checkpatch.py -q -1 2&gt;&amp;1 | tee tmp.checkpatch.log
+       if egrep -i &apos;(warn|err)&apos; tmp.checkpatch.log &gt;/dev/null 2&gt;&amp;1; then
+          IFS=&apos;&apos;
+          ERRORS=&quot;$ERRORS
 
 checkpatch:
 $(cat tmp.checkpatch.log)
 &quot;
-      IFS=&quot;$OLD_IFS&quot;
-   fi
-   rm tmp.checkpatch.log
+          IFS=&quot;$OLD_IFS&quot;
+       fi
+       rm tmp.checkpatch.log
 
-   # now configure the system
-   (./boot.sh &amp;&amp; ./configure &amp;&amp; make CFLAGS:=&quot;$(CFLAGS) -Werror&quot;) 2&gt;&amp;1 | tee tmp.build.log
-   if egrep &apos;^(make: \*\*\* \[all\] Error)&apos; tmp.build.log &gt;/dev/null 2&gt;&amp;1; then
-      IFS=&apos;&apos;
-      ERRORS=&quot;$ERRORS
+       # now configure the system
+       (./boot.sh &amp;&amp; ./configure &amp;&amp; make CFLAGS:=&quot;$(CFLAGS) -Werror&quot;) 2&gt;&amp;1 | tee tmp.build.log
+       if egrep &apos;^(make: \*\*\* \[all\] Error)&apos; tmp.build.log &gt;/dev/null 2&gt;&amp;1; then
+          IFS=&apos;&apos;
+          ERRORS=&quot;$ERRORS
 
 build:
 $(tail -n25 tmp.build.log)
 &quot;
-      IFS=&quot;$OLD_IFS&quot;
+          IFS=&quot;$OLD_IFS&quot;
+          echo &quot;Skip this patch&quot; &gt; skip.done
+       fi
+       rm tmp.build.log
    fi
-   # rm tmp.build.log
 
    if [ &quot;X$ERRORS&quot; != &quot;X&quot; ]; then
       cp tmp.email.txt email.txt
-      echo &quot;Subject: Automated robotic reply.  Re: ${PATCH_SUBJECT}&quot; &gt;&gt; email.txt
+      echo &quot;Subject: Re: ${PATCH_SUBJECT}&quot; &gt;&gt; email.txt
       MSG_ID=$(grep &apos;Message-Id:&apos; &quot;$patch&quot; | cut -d: -f2)
       echo &quot;In-Reply-To: $MSG_ID&quot; &gt;&gt; email.txt
       echo &quot;References: $MSG_ID&quot; &gt;&gt; email.txt
@@ -214,7 +233,11 @@ done
 </command>
     </hudson.tasks.Shell>
     <hudson.tasks.Shell>
-      <command>OLD_IFS=&quot;$IFS&quot;
+      <command>if [ -f skip.done ]; then
+   exit 0
+fi
+
+OLD_IFS=&quot;$IFS&quot;
 # Re-enable this after some development time.
 make distcheck TESTSUITEFLAGS=&apos;-j4 -k !cluster&apos; RECHECK=yes 2&gt;&amp;1 | tee tmp.check.log
 
@@ -228,7 +251,7 @@ PATCH_SUBJECT=$(echo &quot;$patch&quot; | sed -E -e &apos;s,^([0-9]+)-,,&apos; -
 if ! egrep &apos;archives ready for distribution:\s*$&apos; tmp.check.log &gt;/dev/null 2&gt;&amp;1; then
       ERRORS=$(tail -n50 tmp.check.log)
       cp tmp.email.txt email.txt
-      echo &quot;Subject: Automated robotic reply.  Re: ${PATCH_SUBJECT}&quot; &gt;&gt; email.txt
+      echo &quot;Subject: Re: ${PATCH_SUBJECT}&quot; &gt;&gt; email.txt
       MSG_ID=$(grep &apos;Message-Id:&apos; &quot;$patch&quot; | cut -d: -f2)
       echo &quot;In-Reply-To: $MSG_ID&quot; &gt;&gt; email.txt
       echo &quot;References: $MSG_ID&quot; &gt;&gt; email.txt
@@ -248,7 +271,7 @@ if ! egrep &apos;archives ready for distribution:\s*$&apos; tmp.check.log &gt;/d
       echo &quot;Thanks,&quot; &gt;&gt; email.txt
       echo &quot;0-day Robot&quot; &gt;&gt; email.txt
 
-      git send-email --suppress-from --cc=&quot;dev@openvswitch.org&quot; email.txt
+      git send-email --dry-run --suppress-from --cc=&quot;dev@openvswitch.org&quot; email.txt
 fi
 </command>
     </hudson.tasks.Shell>
