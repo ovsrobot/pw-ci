@@ -47,16 +47,22 @@ function emit_series() {
     url="$3"
     submitter_name="$4"
     submitter_email="$5"
+    all="$6"
+    completed=0
+    if [ "$all" = "true" ]; then
+        completed=1
+    fi
 
     if ! series_id_exists "${id}"; then
         echo "============================================="
         echo "Series id: $id"
         echo "Series url: $url"
         echo "submitter: $submitter_name <$submitter_email>"
+        echo "all: $all"
         echo "recording series (${id}, \"${url}\", \"${submitter_name}\", \"${submitter_email}\")"
         echo
 
-        series_db_add_false "$project" "$id" "$url" "$submitter_name" "$submitter_email"
+        series_db_add_false "$project" "$id" "$url" "$submitter_name" "$submitter_email" "$completed"
     fi
 }
 
@@ -86,13 +92,30 @@ function check_new_series() {
 
     response=$(curl -s "$userpw" "$GET_URL")
 
-    series_info=$(echo "$response" | jq -rc '.[] | (.id|tostring) + ";" + .url + ";" + .submitter.name + ";" + .submitter.email')
+    series_info=$(echo "$response" | jq -rc '.[] | (.id|tostring) + ";" + .url + ";" + .submitter.name + ";" + .submitter.email + ";" + (.received_all|tostring)')
 
-    echo "$series_info" | while IFS=\; read -r id url submitter_name submitter_email; do
-        emit_series "${PROJECT}" "$id" "$url" "$submitter_name" "$submitter_email"
+    echo "$series_info" | while IFS=\; read -r id url submitter_name submitter_email all; do
+        emit_series "${PROJECT}" "$id" "$url" "$submitter_name" "$submitter_email" "$all"
     done
 
     touch -m -t "${STAMP}" "${HOME}/.pwmon-${PROJECT}-series"
 }
 
+function check_completed_series() {
+    local PROJECT="$1"
+
+    if [ "$PROJECT" == "" ]; then
+        echo "ERR: need a project"
+        exit 1
+    fi
+
+    get_uncompleted_jobs_as_line "$pw_project" | while IFS=\| read -r id url submitter_name submitter_email; do
+        RESPONSE=$(curl -s "$userpw" "$url" | jq -rc '.received_all')
+        if [ "$RESPONSE" = "true" ]; then
+            series_id_set_complete "$id"
+        fi
+    done
+}
+
 check_new_series "$pw_project"
+check_completed_series "$pw_project"
