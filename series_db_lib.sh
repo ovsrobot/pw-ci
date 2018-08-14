@@ -121,5 +121,5 @@ function series_id_set_complete() {
         return 0
     fi
 
-    echo "update series set series_complete=\"1\" where series_id=$id;" | series_db_execute
+    echo "update series set series_completed=\"1\" where series_id=$id;" | series_db_execute
 }
