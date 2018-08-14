@@ -110,11 +110,14 @@ function check_completed_series() {
     fi
 
     get_uncompleted_jobs_as_line "$pw_project" | while IFS=\| read -r id url submitter_name submitter_email; do
+        echo "Checking on series: $id"
         RESPONSE=$(curl -s "$userpw" "$url" | jq -rc '.received_all')
         if [ "$RESPONSE" = "true" ]; then
+            echo "Setting series $id to completed"
             series_id_set_complete "$id"
         fi
     done
+    return 0
 }
 
 check_new_series "$pw_project"
