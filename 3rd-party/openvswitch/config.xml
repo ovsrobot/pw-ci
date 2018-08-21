@@ -102,7 +102,6 @@
   <triggers/>
   <concurrentBuild>false</concurrentBuild>
   <builders>
-
     <hudson.tasks.Shell>
       <command># this gets all the patches
 
@@ -129,7 +128,7 @@ for patch in $(echo &quot;$SERIES_JSON}&quot; | jq -rc &apos;.patches[].url&apos
     patch_json=$(curl -s -f &quot;${patch}&quot;)
     patch_mbox=$(echo &quot;${patch_json}&quot; | jq -rc &apos;.mbox&apos;)
     patch_subject=$(echo &quot;${patch_json}&quot; | jq -rc &apos;.name&apos; | sed &apos;s@/@ of @&apos;)
-    if echo $patch_subject | grep -o &apos;, RFC,&apos; &gt;/dev/null 2&gt;&amp;1; then
+    if echo $patch_subject | grep -o &apos;RFC&apos; &gt;/dev/null 2&gt;&amp;1; then
         touch skip.done
     fi
     if echo $patch_subject | egrep -o &apos;branch-[0-9]+\.[0-9]+&apos; &gt;/dev/null 2&gt;&amp;1; then
@@ -165,7 +164,7 @@ for patch in *.patch; do
    fi
 
    # apply it
-   git am -q -3 &quot;$patch&quot; 2&gt;&amp;1 | tee tmp.gitam.log
+   git am --signoff -q -3 &quot;$patch&quot; 2&gt;&amp;1 | tee tmp.gitam.log
    if egrep -i &apos;(warn|err|Patch failed)&apos; tmp.gitam.log &gt;/dev/null 2&gt;&amp;1; then
        IFS=&apos;&apos;
        ERRORS=&quot;$ERRORS
@@ -193,7 +192,7 @@ $(cat tmp.checkpatch.log)
        rm tmp.checkpatch.log
 
        # now configure the system
-       (./boot.sh &amp;&amp; ./configure &amp;&amp; make CFLAGS:=&quot;$(CFLAGS) -Werror&quot;) 2&gt;&amp;1 | tee tmp.build.log
+       (./boot.sh &amp;&amp; ./configure --enable-Werror &amp;&amp; make) 2&gt;&amp;1 | tee tmp.build.log
        if egrep &apos;^(make: \*\*\* \[all\] Error)&apos; tmp.build.log &gt;/dev/null 2&gt;&amp;1; then
           IFS=&apos;&apos;
           ERRORS=&quot;$ERRORS
