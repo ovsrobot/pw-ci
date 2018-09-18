@@ -125,9 +125,9 @@ if [ &quot;$COVER_LETTER_URL&quot; != &quot;null&quot; ]; then
 fi
 
 for patch in $(echo &quot;${SERIES_JSON}&quot; | jq -rc &apos;.patches[].url&apos;); do
-    patch_json=$(curl -s -f &quot;${patch}&quot;)
-    patch_mbox=$(echo &quot;${patch_json}&quot; | jq -rc &apos;.mbox&apos;)
-    patch_subject=$(echo &quot;${patch_json}&quot; | jq -rc &apos;.name&apos; | sed &apos;s@/@ of @&apos;)
+    curl -s -f &quot;${patch}&quot; &gt; patch.json
+    patch_mbox=$(jq -rc &apos;.mbox&apos; patch.json)
+    patch_subject=$(jq -rc &apos;.name&apos; patch.json | sed &apos;s@/@ of @&apos;)
     if echo $patch_subject | grep -o &apos;RFC&apos; &gt;/dev/null 2&gt;&amp;1; then
         touch skip.done
     fi
