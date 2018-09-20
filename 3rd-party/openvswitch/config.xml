@@ -134,7 +134,7 @@ for patch in $(echo &quot;${SERIES_JSON}&quot; | jq -rc &apos;.patches[].url&apo
     if echo $patch_subject | egrep -o &apos;branch-[0-9]+\.[0-9]+&apos; &gt;/dev/null 2&gt;&amp;1; then
         git checkout $(echo &quot;$patch_subject&quot; | egrep -o &apos;branch-[0-9]+\.[0-9]+&apos;)
     fi
-    curl -s &quot;$patch_mbox&quot; -o &quot;$(printf %04d $I)-${patch_subject}.patch&quot;
+    curl -s &quot;$patch_mbox&quot; -o &quot;$(printf %04d $I).patch&quot;
     I=$((I+1))
 done
 </command>
@@ -152,11 +152,11 @@ if [ -f skip.done ]; then
 fi
 
 for patch in *.patch; do
-   PATCH_SUBJECT=$(echo &quot;$patch&quot; | sed -E -e &apos;s,^([0-9]+)-,,&apos; -e &apos;s,.patch$,,&apos;)
+   PATCH_SUBJECT=$(git mailinfo /dev/null /dev/null &lt; $patch | grep Subject: | sed &apos;s@Subject: @@&apos;)
    ERRORS=&apos;&apos;
 
    # for each patch
-   
+
    # is it a x-post kernel patch
    if egrep -- &apos;--- a/net&apos; &quot;$patch&quot; &gt;/dev/null 2&gt;&amp;1; then    
        echo &quot;Skip this patch&quot; &gt; skip.done
