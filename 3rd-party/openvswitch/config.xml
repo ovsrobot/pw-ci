@@ -131,6 +131,9 @@ for patch in $(echo &quot;${SERIES_JSON}&quot; | jq -rc &apos;.patches[].url&apo
     if echo $patch_subject | grep -o &apos;RFC&apos; &gt;/dev/null 2&gt;&amp;1; then
         touch skip.done
     fi
+    if echo $patch_subject | grep -o &apos;net-next&apos; &gt;/dev/null 2&gt;&amp;1; then
+        touch skip.done
+    fi
     if echo $patch_subject | egrep -o &apos;branch-[0-9]+\.[0-9]+&apos; &gt;/dev/null 2&gt;&amp;1; then
         git checkout $(echo &quot;$patch_subject&quot; | egrep -o &apos;branch-[0-9]+\.[0-9]+&apos;)
     fi
