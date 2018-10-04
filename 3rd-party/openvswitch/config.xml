@@ -115,16 +115,15 @@ git config sendemail.smtpencryption &quot;$SMTP_ENCRYPTION&quot;
 
 I=0
 
-SERIES_JSON=$(curl -s -f &quot;$SERIES_URL&quot;)
+curl -s -f &quot;$SERIES_URL&quot; &gt; info.json
 
-COVER_LETTER_URL=$(echo &quot;$SERIES_JSON&quot; | jq -rc &apos;.cover_letter.url&apos;)
+COVER_LETTER_URL=$(jq -rc &apos;.cover_letter.url&apos; info.json)
 if [ &quot;$COVER_LETTER_URL&quot; != &quot;null&quot; ]; then
-	    COVER_LETTER_MBOX=$(curl -s -f &quot;$COVER_LETTER_URL&quot; | jq -rc &apos;.mbox&apos;)
-        COVER_LETTER_NAME=$(curl -s -f &quot;$COVER_LETTER_URL&quot; | jq -rc &apos;.name&apos; | sed &apos;s@/@ of @&apos;)
-        curl -s -f &quot;$COVER_LETTER_MBOX&quot; -o &quot;${COVER_LETTER_NAME}.coverletter&quot;
+	    COVER_LETTER_MBOX=$(jq -rc &apos;.mbox&apos; info.json)
+        curl -s -f &quot;$COVER_LETTER_MBOX&quot; -o &quot;cover_letter.info&quot;
 fi
 
-for patch in $(echo &quot;${SERIES_JSON}&quot; | jq -rc &apos;.patches[].url&apos;); do
+for patch in $(jq -rc &apos;.patches[].url&apos; info.json); do
     curl -s -f &quot;${patch}&quot; &gt; patch.json
     patch_mbox=$(jq -rc &apos;.mbox&apos; patch.json)
     patch_subject=$(jq -rc &apos;.name&apos; patch.json | sed &apos;s@/@ of @&apos;)
