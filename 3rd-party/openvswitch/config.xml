@@ -75,6 +75,12 @@
           <defaultValue>Password of the robot.  Careful with this.</defaultValue>
           <trim>false</trim>
         </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>UPLOAD_GIT_REPO</name>
+          <description>Repo for uploading git contents</description>
+          <defaultValue></defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
       </parameterDefinitions>
     </hudson.model.ParametersDefinitionProperty>
   </properties>
@@ -153,6 +159,12 @@ if [ -f skip.done ]; then
    exit 0
 fi
 
+if [ &quot;$UPLOAD_GIT_REPO&quot; ]; then
+   git remote add upload_repo &quot;$UPLOAD_GIT_REPO&quot;
+   git remote update
+   git checkout -b &quot;series_${SERIES_ID}&quot;
+fi
+
 for patch in *.patch; do
    PATCH_SUBJECT=$(git mailinfo /dev/null /dev/null &lt; $patch | grep Subject: | sed &apos;s@Subject: @@&apos;)
    ERRORS=&apos;&apos;
@@ -192,6 +204,10 @@ $(cat tmp.checkpatch.log)
           IFS=&quot;$OLD_IFS&quot;
        fi
        rm tmp.checkpatch.log
+
+       if [ &quot;$UPLOAD_GIT_REPO&quot; ]; then
+          git push -u upload_repo &quot;series_${SERIES_ID}&quot;
+       fi
 
        # now configure the system
        (./boot.sh &amp;&amp; ./configure --enable-Werror &amp;&amp; make) 2&gt;&amp;1 | tee tmp.build.log
