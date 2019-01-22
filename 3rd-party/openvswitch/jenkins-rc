@@ -5,5 +5,5 @@ jenkins_token="Insert a token here"
 
 jenkins_openvswitch_job=openvswitch-job
 jenkins_openvswitch_token=authentication-token
-jenkins_openvswitch_variables="SERIES_ID:series_id SERIES_URL:series_url SUBMITTER:series_submitter_name SUBMITTER_EMAIL:series_submitter_email ROBO_EMAIL:robot_email SMTP_SERVER:server_host SMTP_USER:username SMTP_PASSWORD:password SMTP_SERVERPORT:port SMTP_ENCRYPTION:lolwut"
+jenkins_openvswitch_variables="SERIES_ID:series_id SERIES_URL:series_url SUBMITTER:series_submitter_name SUBMITTER_EMAIL:series_submitter_email ROBO_EMAIL:robot_email SMTP_SERVER:server_host SMTP_USER:username SMTP_PASSWORD:password SMTP_SERVERPORT:port SMTP_ENCRYPTION:(SSL,TLS,STARTTLS,etc.) UPLOAD_GIT_REPO:repo_url"
 jenkins_openvswitch_git=https://github.com/openvswitch/ovs

@@ -72,7 +72,7 @@ function jenkins_submit_series() {
     for var in ${!jenkins_submit_vars}; do
         if [ "X$var" != "X" ]; then
             local NAME=$(echo "$var" | cut -d: -f1)
-            local pre_sub_val=$(echo "$var" | cut -d: -f2)
+            local pre_sub_val=$(echo "$var" | cut -d: -f2-)
 
             VAL=$(ci_get_variable "$pre_sub_val")
 
