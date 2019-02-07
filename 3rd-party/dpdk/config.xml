@@ -1,0 +1,249 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description>This is a generic Job to be executed by a polling script that will generate series information for series to run against.&#xd;
+</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <jenkins.model.BuildDiscarderProperty>
+      <strategy class="hudson.tasks.LogRotator">
+        <daysToKeep>7</daysToKeep>
+        <numToKeep>100</numToKeep>
+        <artifactDaysToKeep>1</artifactDaysToKeep>
+        <artifactNumToKeep>1</artifactNumToKeep>
+      </strategy>
+    </jenkins.model.BuildDiscarderProperty>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>SERIES_ID</name>
+          <description>This will be the ID of the series to poll</description>
+          <defaultValue></defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>SERIES_URL</name>
+          <description>URL of the series from Patchwork</description>
+          <defaultValue></defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>SUBMITTER</name>
+          <description>Full name of the series submitter</description>
+          <defaultValue></defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>SUBMITTER_EMAIL</name>
+          <description>Email address to which the bot will send email</description>
+          <defaultValue></defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>SMTP_SERVER</name>
+          <description></description>
+          <defaultValue>SMTP server to be used for sending email</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>SMTP_USER</name>
+          <description></description>
+          <defaultValue>Username on the SMTP server</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>SMTP_SERVERPORT</name>
+          <description></description>
+          <defaultValue>Port to connect to the SMTP server</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>SMTP_ENCRYPTION</name>
+          <description></description>
+          <defaultValue>Encryption type used on the SMTP server</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>ROBO_EMAIL</name>
+          <description></description>
+          <defaultValue>Email address of the robot</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>SMTP_PASSWORD</name>
+          <description></description>
+          <defaultValue>Password of the robot.  Careful with this.</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>UPLOAD_GIT_REPO</name>
+          <description>Repo for uploading git contents</description>
+          <defaultValue></defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <scm class="hudson.plugins.git.GitSCM" plugin="git@3.9.3">
+    <configVersion>2</configVersion>
+    <userRemoteConfigs>
+      <hudson.plugins.git.UserRemoteConfig>
+        <url>http://dpdk.org/git/dpdk</url>
+      </hudson.plugins.git.UserRemoteConfig>
+    </userRemoteConfigs>
+    <branches>
+      <hudson.plugins.git.BranchSpec>
+        <name>*/master</name>
+      </hudson.plugins.git.BranchSpec>
+    </branches>
+    <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+    <submoduleCfg class="list"/>
+    <extensions/>
+  </scm>
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <authToken>authentication-token</authToken>
+  <triggers/>
+  <concurrentBuild>false</concurrentBuild>
+  <builders>
+    <hudson.tasks.Shell>
+      <command># this gets all the patches
+
+git config user.name &quot;0-day Robot&quot;
+git config user.email &quot;$ROBO_EMAIL&quot;
+git config sendemail.smtpserver &quot;$SMTP_SERVER&quot;
+git config sendemail.smtpuser &quot;$SMTP_USER&quot;
+git config sendemail.smtppass &quot;$SMTP_PASSWORD&quot;
+git config sendemail.smtpserverport &quot;$SMTP_SERVERPORT&quot;
+git config sendemail.smtpencryption &quot;$SMTP_ENCRYPTION&quot;
+
+I=0
+
+curl -s -f &quot;$SERIES_URL&quot; &gt; info.json
+
+COVER_LETTER_URL=$(jq -rc &apos;.cover_letter.url&apos; info.json)
+if [ &quot;$COVER_LETTER_URL&quot; != &quot;null&quot; ]; then
+	    COVER_LETTER_MBOX=$(jq -rc &apos;.mbox&apos; info.json)
+        curl -s -f &quot;$COVER_LETTER_MBOX&quot; -o &quot;cover_letter.info&quot;
+fi
+
+for patch in $(jq -rc &apos;.patches[].url&apos; info.json); do
+    curl -s -f &quot;${patch}&quot; &gt; patch.json
+    patch_mbox=$(jq -rc &apos;.mbox&apos; patch.json)
+    patch_subject=$(jq -rc &apos;.name&apos; patch.json | sed &apos;s@/@ of @&apos;)
+    if echo $patch_subject | grep -o &apos;RFC&apos; &gt;/dev/null 2&gt;&amp;1; then
+        touch skip.done
+    fi
+    curl -s &quot;$patch_mbox&quot; -o &quot;$(printf %04d $I).patch&quot;
+    I=$((I+1))
+done
+</command>
+    </hudson.tasks.Shell>
+    <hudson.tasks.Shell>
+      <command>#!/bin/bash -x
+OLD_IFS=&quot;$IFS&quot;
+IFS=&apos;&apos;
+echo &quot;From: 0-day Robot &lt;$ROBO_EMAIL&gt;
+To: $SUBMITTER &lt;$SUBMITTER_EMAIL&gt;
+Date: $(date +&quot;%a, %e %b %Y %T %::z&quot;)&quot; &gt; tmp.email.txt
+IFS=&quot;$OLD_IFS&quot;
+
+if [ -f skip.done ]; then
+   exit 0
+fi
+
+if [ &quot;$UPLOAD_GIT_REPO&quot; ]; then
+   git remote add upload_repo &quot;$UPLOAD_GIT_REPO&quot;
+   git remote update
+   git checkout -b &quot;series_${SERIES_ID}&quot;
+fi
+
+#set up checkpatch. checkpatch will check code styling and common spelling errors in comments
+curl -s -o checkpatch.pl &apos;https://raw.githubusercontent.com/torvalds/linux/master/scripts/checkpatch.pl&apos;
+chmod 755 checkpatch.pl
+echo &apos;DPDK_CHECKPATCH_PATH=./checkpatch.pl&apos; &gt; .develconfig
+
+exit_status=0
+for patch in *.patch; do
+   PATCH_SUBJECT=$(git mailinfo /dev/null /dev/null &lt; $patch | grep Subject: | sed &apos;s@Subject: @@&apos;)
+
+   # for each patch
+
+   # apply it
+   git am --signoff -q -3 &quot;$patch&quot; 2&gt;&amp;1 | tee tmp.gitam.log
+   if egrep -i &apos;(warn|err|Patch failed)&apos; tmp.gitam.log &gt;/dev/null 2&gt;&amp;1; then
+       echo &quot;&quot; &gt;&gt; ERRORS.log
+       echo &quot;git-am:&quot; &gt;&gt; ERRORS.log
+       cat tmp.gitam.log &gt;&gt; ERRORS.log
+       echo &quot;Skip this patch&quot; &gt; skip.done
+   fi
+   rm tmp.gitam.log
+
+   if [ ! -f skip.done ]; then
+       # check it for patch issues
+
+       if ! ./devtools/checkpatches.sh &quot;$patch&quot; &amp;&gt; tmp.checkpatch.log; then
+          echo &quot;&quot; &gt;&gt; ERRORS.log
+          echo &quot;checkpatch:&quot; &gt;&gt; ERRORS.log
+          cat tmp.checkpatch.log &gt;&gt; ERRORS.log
+       fi
+       cat tmp.checkpatch.log #make checkpatches log visible in jenkins
+       rm tmp.checkpatch.log
+
+       if [ &quot;$UPLOAD_GIT_REPO&quot; ]; then
+          git push -u upload_repo &quot;series_${SERIES_ID}&quot;
+       fi
+
+       # now configure the system
+       rm -rf build/
+       echo &quot;Building stage...&quot;
+       if ! (meson build --werror -Dexamples=all &amp;&amp; ninja -C build) &amp;&gt; tmp.build.log; then
+          echo &quot;&quot; &gt;&gt; ERRORS.log
+          echo &quot;build:&quot; &gt;&gt; ERRORS.log
+          tail -n25 tmp.build.log &gt;&gt; ERRORS.log
+          echo &quot;Skip this patch&quot; &gt; skip.done
+       fi
+       tail -n25 tmp.build.log #make build log visible to jenkins
+       rm tmp.build.log
+   fi
+
+   if [ -f ERRORS.log ]; then
+      cp tmp.email.txt email.txt
+      echo &quot;Subject: Re: ${PATCH_SUBJECT}&quot; &gt;&gt; email.txt
+      MSG_ID=$(grep &apos;Message-Id:&apos; &quot;$patch&quot; | cut -d: -f2)
+      echo &quot;In-Reply-To: $MSG_ID&quot; &gt;&gt; email.txt
+      echo &quot;References: $MSG_ID&quot; &gt;&gt; email.txt
+      echo &quot;&quot; &gt;&gt; email.txt
+      echo &quot;Bleep bloop.  Greetings $SUBMITTER, I am a robot and I have tried out your patch.&quot; &gt;&gt; email.txt
+      echo &quot;Thanks for your contribution.&quot; &gt;&gt; email.txt
+      echo &quot;&quot; &gt;&gt; email.txt
+      echo &quot;I encountered some error that I wasn&apos;t expecting.  See the details below.&quot; &gt;&gt; email.txt
+      cat ERRORS.log &gt;&gt; email.txt
+      echo &quot;&quot; &gt;&gt; email.txt
+      echo &quot;Please check this out.  If you feel there has been an error, please email aconole@bytheb.org&quot; &gt;&gt; email.txt
+      echo &quot;&quot; &gt;&gt; email.txt
+      echo &quot;Thanks,&quot; &gt;&gt; email.txt
+      echo &quot;0-day Robot&quot; &gt;&gt; email.txt
+
+      git send-email --suppress-from --cc=&quot;dev@dpdk.org&quot; email.txt
+      rm ERRORS.log
+      exit_status=1
+   fi
+done
+
+exit $exit_status</command>
+    </hudson.tasks.Shell>
+  </builders>
+  <publishers/>
+  <buildWrappers>
+    <hudson.plugins.ws__cleanup.PreBuildCleanup plugin="ws-cleanup@0.37">
+      <deleteDirs>false</deleteDirs>
+      <cleanupParameter></cleanupParameter>
+      <externalDelete></externalDelete>
+      <disableDeferredWipeout>false</disableDeferredWipeout>
+    </hudson.plugins.ws__cleanup.PreBuildCleanup>
+    <hudson.plugins.timestamper.TimestamperBuildWrapper plugin="timestamper@1.9"/>
+  </buildWrappers>
+</project>
