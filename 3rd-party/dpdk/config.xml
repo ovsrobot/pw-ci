@@ -84,7 +84,7 @@
       </parameterDefinitions>
     </hudson.model.ParametersDefinitionProperty>
   </properties>
-  <scm class="hudson.plugins.git.GitSCM" plugin="git@3.9.1">
+  <scm class="hudson.plugins.git.GitSCM" plugin="git@3.9.3">
     <configVersion>2</configVersion>
     <userRemoteConfigs>
       <hudson.plugins.git.UserRemoteConfig>
@@ -142,7 +142,8 @@ done
 </command>
     </hudson.tasks.Shell>
     <hudson.tasks.Shell>
-      <command>OLD_IFS=&quot;$IFS&quot;
+      <command>#!/bin/bash -x
+OLD_IFS=&quot;$IFS&quot;
 IFS=&apos;&apos;
 echo &quot;From: 0-day Robot &lt;$ROBO_EMAIL&gt;
 To: $SUBMITTER &lt;$SUBMITTER_EMAIL&gt;
@@ -164,41 +165,31 @@ curl -s -o checkpatch.pl &apos;https://raw.githubusercontent.com/torvalds/linux/
 chmod 755 checkpatch.pl
 echo &apos;DPDK_CHECKPATCH_PATH=./checkpatch.pl&apos; &gt; .develconfig
 
-#enable codespell
-sed -i &apos;s/options=&quot;$options --show-types&quot;/options=&quot;$options --show-types --codespell&quot;/g&apos; devtools/checkpatches.sh
-
+exit_status=0
 for patch in *.patch; do
    PATCH_SUBJECT=$(git mailinfo /dev/null /dev/null &lt; $patch | grep Subject: | sed &apos;s@Subject: @@&apos;)
-   ERRORS=&apos;&apos;
 
    # for each patch
 
    # apply it
    git am --signoff -q -3 &quot;$patch&quot; 2&gt;&amp;1 | tee tmp.gitam.log
    if egrep -i &apos;(warn|err|Patch failed)&apos; tmp.gitam.log &gt;/dev/null 2&gt;&amp;1; then
-       IFS=&apos;&apos;
-       ERRORS=&quot;$ERRORS
-
-git-am:
-$(cat tmp.gitam.log)
-&quot;
-       IFS=&quot;$OLD_IFS&quot;
+       echo &quot;&quot; &gt;&gt; ERRORS.log
+       echo &quot;git-am:&quot; &gt;&gt; ERRORS.log
+       cat tmp.gitam.log &gt;&gt; ERRORS.log
        echo &quot;Skip this patch&quot; &gt; skip.done
    fi
    rm tmp.gitam.log
 
    if [ ! -f skip.done ]; then
        # check it for patch issues
-       ./devtools/checkpatches.sh &quot;$patch&quot; 2&gt;&amp;1 | tee tmp.checkpatch.log
-       if egrep -i &apos;(warn|err)&apos; tmp.checkpatch.log &gt;/dev/null 2&gt;&amp;1; then
-          IFS=&apos;&apos;
-          ERRORS=&quot;$ERRORS
 
-checkpatch:
-$(cat tmp.checkpatch.log)
-&quot;
-          IFS=&quot;$OLD_IFS&quot;
+       if ! ./devtools/checkpatches.sh &quot;$patch&quot; &amp;&gt; tmp.checkpatch.log; then
+          echo &quot;&quot; &gt;&gt; ERRORS.log
+          echo &quot;checkpatch:&quot; &gt;&gt; ERRORS.log
+          cat tmp.checkpatch.log &gt;&gt; ERRORS.log
        fi
+       cat tmp.checkpatch.log #make checkpatches log visible in jenkins
        rm tmp.checkpatch.log
 
        if [ &quot;$UPLOAD_GIT_REPO&quot; ]; then
@@ -206,21 +197,19 @@ $(cat tmp.checkpatch.log)
        fi
 
        # now configure the system
-       (make defconfig &amp;&amp; make all) 2&gt;&amp;1 | tee tmp.build.log
-       if egrep &apos;^(make: \*\*\* \[all\] Error)&apos; tmp.build.log &gt;/dev/null 2&gt;&amp;1; then
-          IFS=&apos;&apos;
-          ERRORS=&quot;$ERRORS
-
-build:
-$(tail -n25 tmp.build.log)
-&quot;
-          IFS=&quot;$OLD_IFS&quot;
+       rm -rf build/
+       echo &quot;Building stage...&quot;
+       if ! (meson build --werror -Dexamples=all &amp;&amp; ninja -C build) &amp;&gt; tmp.build.log; then
+          echo &quot;&quot; &gt;&gt; ERRORS.log
+          echo &quot;build:&quot; &gt;&gt; ERRORS.log
+          tail -n25 tmp.build.log &gt;&gt; ERRORS.log
           echo &quot;Skip this patch&quot; &gt; skip.done
        fi
+       tail -n25 tmp.build.log #make build log visible to jenkins
        rm tmp.build.log
    fi
 
-   if [ &quot;X$ERRORS&quot; != &quot;X&quot; ]; then
+   if [ -f ERRORS.log ]; then
       cp tmp.email.txt email.txt
       echo &quot;Subject: Re: ${PATCH_SUBJECT}&quot; &gt;&gt; email.txt
       MSG_ID=$(grep &apos;Message-Id:&apos; &quot;$patch&quot; | cut -d: -f2)
@@ -231,9 +220,7 @@ $(tail -n25 tmp.build.log)
       echo &quot;Thanks for your contribution.&quot; &gt;&gt; email.txt
       echo &quot;&quot; &gt;&gt; email.txt
       echo &quot;I encountered some error that I wasn&apos;t expecting.  See the details below.&quot; &gt;&gt; email.txt
-      IFS=&apos;&apos;
-      echo &quot;$ERRORS&quot; &gt;&gt; email.txt
-      IFS=&quot;$OLD_IFS&quot;
+      cat ERRORS.log &gt;&gt; email.txt
       echo &quot;&quot; &gt;&gt; email.txt
       echo &quot;Please check this out.  If you feel there has been an error, please email aconole@bytheb.org&quot; &gt;&gt; email.txt
       echo &quot;&quot; &gt;&gt; email.txt
@@ -241,9 +228,12 @@ $(tail -n25 tmp.build.log)
       echo &quot;0-day Robot&quot; &gt;&gt; email.txt
 
       git send-email --suppress-from --cc=&quot;dev@openvswitch.org&quot; email.txt
+      rm ERRORS.log
+      exit_status=1
    fi
 done
-</command>
+
+exit $exit_status</command>
     </hudson.tasks.Shell>
   </builders>
   <publishers/>
@@ -254,5 +244,6 @@ done
       <externalDelete></externalDelete>
       <disableDeferredWipeout>false</disableDeferredWipeout>
     </hudson.plugins.ws__cleanup.PreBuildCleanup>
+    <hudson.plugins.timestamper.TimestamperBuildWrapper plugin="timestamper@1.9"/>
   </buildWrappers>
 </project>
