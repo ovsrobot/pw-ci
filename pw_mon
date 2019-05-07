@@ -23,16 +23,27 @@
 
 if [ "$1" != "" ]; then
     pw_project="$1"
+    shift
+fi
+
+if [ "$1" != "" ]; then
+    pw_instance="$1"
+    shift
 fi
 
 if [ "X$pw_instance" == "X" -o "X$pw_project" == "X" ]; then
    echo "ERROR: Patchwork instance and project are unset."
    echo "Please setup ${HOME}/.pwmon-rc and set pw_project "
    echo "(or pass it as an argument)."
+   echo "Also either setup pw_instance or pass it as an argument."
    exit 1
 fi
 
 userpw=""
+
+if [ "$1" != "" ]; then
+    pw_credential="$1"
+fi
 
 if [ "X$pw_credential" != "X" ]; then
    userpw="-u \"${pw_credential}\""
@@ -41,41 +52,44 @@ fi
 source $(dirname $0)/series_db_lib.sh
 
 function emit_series() {
+    local instance="$1"
+    local project="$2"
+    local id="$3"
+    local url="$4"
+    local submitter_name="$5"
+    local submitter_email="$6"
+    local all="$7"
+    local completed=0
 
-    project="$1"
-    id="$2"
-    url="$3"
-    submitter_name="$4"
-    submitter_email="$5"
-    all="$6"
-    completed=0
     if [ "$all" = "true" ]; then
         completed=1
     fi
 
-    if ! series_id_exists "${id}"; then
+    if ! series_id_exists "${instance}" "${id}"; then
         echo "============================================="
-        echo "Series id: $id"
-        echo "Series url: $url"
-        echo "submitter: $submitter_name <$submitter_email>"
-        echo "all: $all"
+        echo "Series instance: $instance"
+        echo "Series id:       $id"
+        echo "Series url:      $url"
+        echo "submitter:       $submitter_name <$submitter_email>"
+        echo "all:             $all"
         echo "recording series (${id}, \"${url}\", \"${submitter_name}\", \"${submitter_email}\")"
         echo
 
-        series_db_add_false "$project" "$id" "$url" "$submitter_name" "$submitter_email" "$completed"
+        series_db_add_false "$instance" "$project" "$id" "$url" "$submitter_name" "$submitter_email" "$completed"
     fi
 }
 
 function check_new_series() {
 
-    local PROJECT="$1"
+    local INSTANCE="$1"
+    local PROJECT="$2"
 
-    if [ "$PROJECT" == "" ]; then
+    if [ "$PROJECT" == "" -o "$INSTANCE" == "" ]; then
         echo "ERR: need a project"
         exit 1
     fi
 
-    if [ ! -e "${HOME}/.pwmon-${PROJECT}-series" ]; then
+    if [ ! -e "${HOME}/.pwmon-${INSTANCE}-${PROJECT}-series" ]; then
         echo "WARN: PW-series doesn't exist..."
         echo "      Re-running with patches since yesterday"
         TRY_DATE=$(date --date="yesterday" '+%F %T')
@@ -88,37 +102,30 @@ function check_new_series() {
     SINCE=$(echo $TRY_DATE | sed 's@ @%20@')
     STAMP=$(date --date="$STAMP_DATE" '+%C%y%m%d%H%M')
 
-    GET_URL="http://${pw_instance}/api/1.0/series/?project=${PROJECT}&since=${SINCE}"
+    GET_URL="http://${INSTANCE}/api/1.0/series/?project=${PROJECT}&since=${SINCE}"
 
     response=$(curl -s "$userpw" "$GET_URL")
 
     series_info=$(echo "$response" | jq -rc '.[] | (.id|tostring) + ";" + .url + ";" + .submitter.name + ";" + .submitter.email + ";" + (.received_all|tostring)')
 
     echo "$series_info" | while IFS=\; read -r id url submitter_name submitter_email all; do
-        emit_series "${PROJECT}" "$id" "$url" "$submitter_name" "$submitter_email" "$all"
+        emit_series "${INSTANCE}" "${PROJECT}" "$id" "$url" "$submitter_name" "$submitter_email" "$all"
     done
 
-    touch -m -t "${STAMP}" "${HOME}/.pwmon-${PROJECT}-series"
+    touch -m -t "${STAMP}" "${HOME}/.pwmon-${INSTANCE}-${PROJECT}-series"
 }
 
 function check_completed_series() {
-    local PROJECT="$1"
-
-    if [ "$PROJECT" == "" ]; then
-        echo "ERR: need a project"
-        exit 1
-    fi
-
-    get_uncompleted_jobs_as_line "$pw_project" | while IFS=\| read -r id url submitter_name submitter_email; do
+    get_uncompleted_jobs_as_line "$pw_instance" "$pw_project" | while IFS=\| read -r id url submitter_name submitter_email; do
         echo "Checking on series: $id"
-        RESPONSE=$(curl -s "$userpw" "$url" | jq -rc '.received_all')
+        local RESPONSE=$(curl -s "$userpw" "$url" | jq -rc '.received_all')
         if [ "$RESPONSE" = "true" ]; then
             echo "Setting series $id to completed"
-            series_id_set_complete "$id"
+            series_id_set_complete "$pw_instance" "$id"
         fi
     done
     return 0
 }
 
-check_new_series "$pw_project"
-check_completed_series "$pw_project"
+check_completed_series "$pw_instance" "$pw_project"
+check_new_series "$pw_instance" "$pw_project"
