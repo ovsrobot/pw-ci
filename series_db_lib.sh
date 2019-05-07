@@ -49,6 +49,15 @@ EOF
         fi
         run_db_command "INSERT INTO series_schema_version(id) values (2);"
     fi
+
+    # 0003 - series download retry mechanism
+    run_db_command "select * from series_schema_version;" | egrep '^3$' >/dev/null 2>&1
+    if [ $? -eq 1 ]; then
+        sqlite3 ${HOME}/.series-db <<EOF
+ALTER TABLE series ADD COLUMN series_downloaded INTEGER;
+EOF
+        run_db_command "INSERT INTO series_schema_version(id) values (3);"
+    fi
 }
 
 function series_db_exists() {
@@ -121,6 +130,15 @@ function get_uncompleted_jobs_as_line() {
     echo "select series_id,series_url,series_submitter,series_email from series where series_instance=\"$instance\" and series_project=\"$project\" and series_completed=\"0\" and series_submitted=\"false\" and series_downloaded=\"0\";" | series_db_execute
 }
 
+function get_undownloaded_jobs_as_line() {
+    local instance="$1"
+    local project="$2"
+
+    series_db_exists
+
+    echo "select series_id,series_url,series_submitter,series_email from series where series_instance=\"$instance\" and series_project=\"$project\" and series_completed=\"1\" and series_submitted=\"true\" and series_downloaded=\"1\";" | series_db_execute
+}
+
 function series_id_set_submitted() {
     local instance="$1"
     local id="$2"
@@ -155,4 +173,40 @@ function series_id_set_complete() {
 
     echo "update series set series_completed=\"1\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
     return 0
+}
+
+function series_id_set_downloading() {
+    local instance="$1"
+    local id="$2"
+
+    if ! series_id_exists "$instance" "$id"; then
+        return 0
+    fi
+
+    echo "update series set series_downloaded=\"1\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+}
+
+function series_id_set_downloaded() {
+    local instance="$1"
+    local id="$2"
+
+    if ! series_id_exists "$instance" "$id"; then
+        return 0
+    fi
+
+    # Just in case we 'race' with the resubmit.  It shouldn't happen.
+    series_id_set_submitted "$instance" "$id"
+    echo "update series set series_downloaded=\"2\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+}
+
+function series_id_clear_downloaded() {
+    local instance="$1"
+    local id="$2"
+
+    if ! series_id_exists "$instance" "$id"; then
+        return 0
+    fi
+
+    series_id_clear_submitted "$instance" "$id"
+    echo "update series set series_downloaded=\"0\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
 }
