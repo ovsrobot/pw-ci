@@ -29,11 +29,17 @@ fi
 
 if [ "$1" != "" ]; then
     pw_project="$1"
+    shift
 fi
 
-if [ "X$pw_project" == "X" ]; then
+if [ "$1" != "" ]; then
+    pw_instance="$1"
+fi
+
+if [ "X$pw_project" == "X" -o "X$pw_instance" == "X" ]; then
    echo "ERROR: Patchwork project is unset."
    echo "Please setup ${HOME}/.cisub-rc and set pw_project "
+   echo "Please setup ${HOME}/.cisub-rc and set pw_instance "
    echo "(or pass it as an argument)."
    exit 1
 fi
@@ -43,18 +49,20 @@ source $(dirname $0)/${ci_backend}_lib.sh
 
 function ci_submit_job() {
 
-    id="$1"
-    url="$2"
-    submitter_name="$3"
-    submitter_email="$4"
+    instance="$1"
+    id="$2"
+    url="$3"
+    submitter_name="$4"
+    submitter_email="$5"
 
     echo "Submit JOB:"
-    echo "  ID: $id"
-    echo "  URL: $url"
+    echo "  INSTANCE:  $instance"
+    echo "  ID:        $id"
+    echo "  URL:       $url"
     echo "  Submitter: $submitter_name <$submitter_email>"
 
-    if ${ci_backend}_submit_series "$id" "$url" "$submitter_name" "$submitter_email"; then
-        series_id_set_submitted "$id"
+    if ${ci_backend}_submit_series "$instance" "$id" "$url" "$submitter_name" "$submitter_email"; then
+        series_id_set_submitted "$instance" "$id"
         return 0
     fi
     return 1
@@ -71,13 +79,15 @@ function ci_get_variable() {
         echo "${submitter_name}"
     elif [ "$value_var" == "series_submitter_email" ]; then
         echo "${submitter_email}"
+    elif [ "$value_var" == "series_instance" ]; then
+        echo "${pw_instance}"
     else
         echo "$value_var"
     fi
 }
 
-get_unsubmitted_jobs_as_line "$pw_project" | while IFS=\| read -r id url submitter_name submitter_email; do
-    if ! ci_submit_job "$id" "$url" "$submitter_name" "$submitter_email"; then
+get_unsubmitted_jobs_as_line "$pw_instance" "$pw_project" | while IFS=\| read -r id url submitter_name submitter_email; do
+    if ! ci_submit_job "$pw_instance" "$id" "$url" "$submitter_name" "$submitter_email"; then
         echo "Unable to submit job with series id: $id"
     fi
 done

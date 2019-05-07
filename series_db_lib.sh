@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-Identifier: gpl-2.0-or-later
-# Copyright (C) 2018, Red Hat, Inc.
+# Copyright (C) 2018,2019 Red Hat, Inc.
 #
 # Licensed under the terms of the GNU General Public License as published
 # by the Free Software Foundation; either version 2 of the License, or
@@ -27,12 +27,27 @@ function series_db_upgrade() {
         run_db_command "INSERT INTO series_schema_version(id) values (0);"
     fi
 
+    # 0001 - completion information
     run_db_command "select * from series_schema_version;" | egrep '^1$' >/dev/null 2>&1
     if [ $? -eq 1 ]; then
         sqlite3 ${HOME}/.series-db <<EOF
 ALTER TABLE series ADD COLUMN series_completed INTEGER;
 EOF
         run_db_command "INSERT INTO series_schema_version(id) values (1);"
+    fi
+
+    # 0002 - series patchwork instance
+    run_db_command "select * from series_schema_version;" | egrep '^2$' >/dev/null 2>&1
+    if [ $? -eq 1 ]; then
+        sqlite3 ${HOME}/.series-db <<EOF
+ALTER TABLE series ADD COLUMN series_instance TEXT NOT NULL DEFAULT 'none';
+EOF
+        # we rely on the instance being leaked to the library here.
+        # it's a layering violation.. :-/
+        if [ "X$pw_instance" != "X" ]; then
+            run_db_command "UPDATE series SET series_instance=\"$pw_instance\";"
+        fi
+        run_db_command "INSERT INTO series_schema_version(id) values (2);"
     fi
 }
 
@@ -64,21 +79,22 @@ function series_db_execute() {
 }
 
 function series_db_add_false() {
-    project="$1"
-    id="$2"
-    url="$3"
-    submitter_name="$4"
-    submitter_email="$5"
-    completed="$6"
+    local instance="$1"
+    local project="$2"
+    local id="$3"
+    local url="$4"
+    local submitter_name="$5"
+    local submitter_email="$6"
+    local completed="$7"
 
-    echo "insert into series(series_id, series_project, series_url, series_submitter, series_email, series_submitted, series_completed) values (${id}, \"${project}\", \"${url}\", \"${submitter_name}\", \"${submitter_email}\", \"false\", \"${completed}\");" | series_db_execute
+    echo "insert into series(series_id, series_project, series_url, series_submitter, series_email, series_submitted, series_completed, series_instance) values (${id}, \"${project}\", \"${url}\", \"${submitter_name}\", \"${submitter_email}\", \"false\", \"${completed}\", \"${instance}\");" | series_db_execute
 }
 
 function series_id_exists() {
 
     series_db_exists
 
-    local CHECK_FOR_ID=$(echo "select series_id from series where series_id=${1};" | series_db_execute)
+    local CHECK_FOR_ID=$(echo "select series_id from series where series_id=${2} and series_instance=\"${1}\";" | series_db_execute)
 
     if [ "$CHECK_FOR_ID" != "" ]; then
         return 0
@@ -88,38 +104,55 @@ function series_id_exists() {
 }
 
 function get_unsubmitted_jobs_as_line() {
-    project="$1"
+    local instance="$1"
+    local project="$2"
 
     series_db_exists
 
-    echo "select series_id,series_url,series_submitter,series_email from series where series_project=\"$project\" and series_completed=\"1\" and series_submitted=\"false\";" | series_db_execute
+    echo "select series_id,series_url,series_submitter,series_email from series where series_instance=\"$instance\" and series_project=\"$project\" and series_completed=\"1\" and series_submitted=\"false\";" | series_db_execute
 }
 
 function get_uncompleted_jobs_as_line() {
-    project="$1"
+    local instance="$1"
+    local project="$2"
 
     series_db_exists
 
-    echo "select series_id,series_url,series_submitter,series_email from series where series_project=\"$project\" and series_completed=\"0\" and series_submitted=\"false\";" | series_db_execute
+    echo "select series_id,series_url,series_submitter,series_email from series where series_instance=\"$instance\" and series_project=\"$project\" and series_completed=\"0\" and series_submitted=\"false\" and series_downloaded=\"0\";" | series_db_execute
 }
 
 function series_id_set_submitted() {
-    id="$1"
+    local instance="$1"
+    local id="$2"
 
-    if ! series_id_exists "$id"; then
+    if ! series_id_exists "$instance" "$id"; then
+        return 0
+    fi
+
+    echo "update series set series_submitted=\"true\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+    return 0
+}
+
+function series_id_clear_submitted() {
+    local instance="$1"
+    local id="$2"
+
+    if ! series_id_exists "$instance" "$id"; then
         return 0
     fi
     
-    echo "update series set series_submitted=\"true\" where series_id=$id;" | series_db_execute
+    echo "update series set series_submitted=\"false\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
     return 0
 }
 
 function series_id_set_complete() {
-    id="$1"
+    local instance="$1"
+    local id="$2"
 
-    if ! series_id_exists "$id"; then
+    if ! series_id_exists "$instance" "$id"; then
         return 0
     fi
 
-    echo "update series set series_completed=\"1\" where series_id=$id;" | series_db_execute
+    echo "update series set series_completed=\"1\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+    return 0
 }
