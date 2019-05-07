@@ -1,0 +1,65 @@
+#!/bin/bash
+# SPDX-Identifier: gpl-2.0-or-later
+# Copyright (C) 2019, Red Hat, Inc.
+#
+# Licensed under the terms of the GNU General Public License as published
+# by the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.  You may obtain a copy of the
+# license at
+#
+#    https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+source $(dirname $0)/series_db_lib.sh
+
+START="0"
+
+while [ "$1" != "" ]; do
+    if [ "$1" == "--start" ]; then
+        START="1"
+    elif [ "$1" == "--clear" ]; then
+        START="2"
+    else
+        break
+    fi
+    shift
+done
+
+if [ "$1" != "" ]; then
+    pw_instance="$1"
+    shift
+fi
+
+if [ "$1" != "" ]; then
+    series_id="$1"
+    shift
+fi
+
+if [ "X$pw_instance" == "X" -o "X$series_id" == "X" ]; then
+   echo "ERROR: Patchwork instance and series ID are unset."
+   echo "Please invoke as: $0 [--start] pw_instance series_id"
+   exit 1
+fi
+
+echo "ID:     $series_id"
+if ! series_id_exists "$pw_instance" "$series_id"; then
+    echo "ERROR: not found on instance $pw_instance"
+    exit 1
+fi
+
+
+if [ "$START" == "1" ]; then
+    echo "STATUS: starting"
+    series_id_set_downloading "$pw_instance" "$series_id"
+elif [ "$START" == "2" ]; then
+    echo "STATUS: clear"
+    series_id_clear_downloaded "$pw_instance" "$series_id"
+else
+    echo "STATUS: downloaded"
+    series_id_set_downloaded "$pw_instance" "$series_id"
+fi

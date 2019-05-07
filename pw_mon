@@ -127,5 +127,14 @@ function check_completed_series() {
     return 0
 }
 
+function check_undownloaded_series() {
+    get_undownloaded_jobs_as_line "$pw_instance" "$pw_project" | while IFS=\| read -r id url submitter_name submitter_email; do
+        echo "re-submitting series: $id"
+        series_id_clear_downloaded "$pw_instance" "$id"
+    done
+    return 0
+}
+
+check_undownloaded_series "$pw_instance" "$pw_project"
 check_completed_series "$pw_instance" "$pw_project"
 check_new_series "$pw_instance" "$pw_project"
