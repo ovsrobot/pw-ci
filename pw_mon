@@ -95,7 +95,7 @@ function check_new_series() {
         TRY_DATE=$(date --date="yesterday" '+%F %T')
         STAMP_DATE=$(date --date="$TRY_DATE + 1 day")
     else
-        TRY_DATE=$(stat "${HOME}/.pwmon-${PROJECT}-series" | grep Modify | cut -d" " -f2-3 | cut -d. -f1)
+        TRY_DATE=$(stat "${HOME}/.pwmon-${INSTANCE}-${PROJECT}-series" | grep Modify | cut -d" " -f2-3 | cut -d. -f1)
         STAMP_DATE=$(date)
     fi
 
