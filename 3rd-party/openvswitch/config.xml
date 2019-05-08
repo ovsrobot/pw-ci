@@ -121,12 +121,18 @@ git config sendemail.smtpencryption &quot;$SMTP_ENCRYPTION&quot;
 
 I=0
 
+curl -s -f https://raw.githubusercontent.com/orgcandman/pw-ci/master/series_db_lib.sh &gt; series_db_lib.sh
+curl -s -f https://raw.githubusercontent.com/orgcandman/pw-ci/master/series_downloaded &gt; series_downloaded
+chmod +x series_downloaded
+
+./series_downloaded --start patchwork.ozlabs.org ${SERIES_ID}
+
 curl -s -f &quot;$SERIES_URL&quot; &gt; info.json
 
 COVER_LETTER_URL=$(jq -rc &apos;.cover_letter.url&apos; info.json)
 if [ &quot;$COVER_LETTER_URL&quot; != &quot;null&quot; ]; then
-	    COVER_LETTER_MBOX=$(jq -rc &apos;.mbox&apos; info.json)
-        curl -s -f &quot;$COVER_LETTER_MBOX&quot; -o &quot;cover_letter.info&quot;
+    COVER_LETTER_MBOX=$(jq -rc &apos;.mbox&apos; info.json)
+    curl -s -f &quot;$COVER_LETTER_MBOX&quot; -o &quot;coverletter.mbox&quot;
 fi
 
 for patch in $(jq -rc &apos;.patches[].url&apos; info.json); do
@@ -140,11 +146,25 @@ for patch in $(jq -rc &apos;.patches[].url&apos; info.json); do
         touch skip.done
     fi
     if echo $patch_subject | egrep -o &apos;branch-[0-9]+\.[0-9]+&apos; &gt;/dev/null 2&gt;&amp;1; then
+        cp utilities/checkpatch.py ./safe_checkpatch.py
         git checkout $(echo &quot;$patch_subject&quot; | egrep -o &apos;branch-[0-9]+\.[0-9]+&apos;)
+        cp ./safe_checkpatch.py utilities/checkpatch.py
+    fi
+    if echo $patch_subject | egrep -o &apos;dpdk-hwol&apos; &gt;/dev/null 2&gt;&amp;1; then
+        cp utilities/checkpatch.py ./safe_checkpatch.py
+        git checkout dpdk-hwol
+        cp ./safe_checkpatch.py utilities/checkpatch.py
+    fi
+    if echo $patch_subject | egrep -o &apos;dpdk-latest&apos; &gt;/dev/null 2&gt;&amp;1; then
+        cp utilities/checkpatch.py ./safe_checkpatch.py
+        git checkout dpdk-latest
+        cp ./safe_checkpatch.py utilities/checkpatch.py
     fi
     curl -s &quot;$patch_mbox&quot; -o &quot;$(printf %04d $I).patch&quot;
     I=$((I+1))
 done
+
+./series_downloaded patchwork.ozlabs.org ${SERIES_ID}
 </command>
     </hudson.tasks.Shell>
     <hudson.tasks.Shell>
@@ -160,21 +180,33 @@ if [ -f skip.done ]; then
 fi
 
 if [ &quot;$UPLOAD_GIT_REPO&quot; ]; then
+
+   # the following hack is to work around something else running on this system
+   # constantly overwriting the ssh configuration
+   echo &apos;ssh -i ~/.ssh/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $*&apos; &gt; ssh
+   chmod +x ssh
+
    git remote add upload_repo &quot;$UPLOAD_GIT_REPO&quot;
-   git remote update
+   GIT_SSH=&apos;./ssh&apos; git remote update
    git checkout -b &quot;series_${SERIES_ID}&quot;
 fi
 
 for patch in *.patch; do
-   PATCH_SUBJECT=$(git mailinfo /dev/null /dev/null &lt; $patch | grep Subject: | sed &apos;s@Subject: @@&apos;)
+   PATCH_SUBJECT=$(git mailinfo -k /dev/null /dev/null &lt; $patch | grep Subject: | sed &apos;s@Subject: @@&apos;)
    ERRORS=&apos;&apos;
 
    # for each patch
-
+   
    # is it a x-post kernel patch
    if egrep -- &apos;--- a/net&apos; &quot;$patch&quot; &gt;/dev/null 2&gt;&amp;1; then    
        echo &quot;Skip this patch&quot; &gt; skip.done
        exit 0
+   fi
+   
+   # Correct for &apos;via dev&apos; from DMARC enablement
+   if grep &apos;^From:.*via dev.*&apos; &quot;$patch&quot; &gt;/dev/null 2&gt;&amp;1; then
+       sed -i &apos;/^From:.*via dev.*/d
+               s/^[Rr]eply-[tT]o:/From:/&apos; &quot;$patch&quot;
    fi
 
    # apply it
@@ -206,7 +238,7 @@ $(cat tmp.checkpatch.log)
        rm tmp.checkpatch.log
 
        if [ &quot;$UPLOAD_GIT_REPO&quot; ]; then
-          git push -u upload_repo &quot;series_${SERIES_ID}&quot;
+          GIT_SSH=&apos;./ssh&apos; git push -u upload_repo &quot;series_${SERIES_ID}&quot;
        fi
 
        # now configure the system
