@@ -32,7 +32,7 @@ function travis_request() {
          https://${TRAVIS_API_SERVER}/${TRAVIS_URI}
 }
 
-function travis_builds_for_series() {
+function travis_builds_for_branch() {
     local TRAVIS_API_SERVER="$1"
     shift
 
@@ -48,3 +48,4 @@ function travis_builds_for_series() {
     travis_request "${TRAVIS_API_SERVER}" "${TRAVIS_CREDENTIAL}" \
                    "repo/${TRAVIS_REPO}/builds?branch.name=${TRAVIS_BRANCH}" | jq -rc '.builds[] | .commit.sha+","+.state+","+.started_at+","+.finished_at'
 }
+

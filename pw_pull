@@ -1,0 +1,102 @@
+#!/bin/bash
+# SPDX-Identifier: gpl-2.0-or-later
+# Copyright (C) 2019, Red Hat, Inc.
+#
+# Pull all the patches for a series
+#
+# Monitors a project on a patchwork instance for new series submissions
+# Records the submissions in the series database (and emits them on the
+# stdout line for processing)
+#
+# Licensed under the terms of the GNU General Public License as published
+# by the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.  You may obtain a copy of the
+# license at
+#
+#    https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[ -f "${HOME}/.pwmon-rc" ] && source "${HOME}/.pwmon-rc"
+
+pull_coverletter="no"
+output_dir="./"
+
+while [[ "$1" == --* ]]; do
+    if [ "$1" == "--cover-letter" ]; then
+       pull_coverletter="yes"
+    fi
+
+    if [ "$1" == "--output-dir" ]; then
+        shift
+        output_dir="$1"
+    fi
+    shift
+done
+
+series_id="$1"
+shift
+
+if [ "$1" != "" ]; then
+    pw_project="$1"
+    shift
+fi
+
+if [ "$1" != "" ]; then
+    pw_instance="$1"
+    shift
+fi
+
+if [ "X$pw_instance" == "X" -o "X$pw_project" == "X" ]; then
+   echo "ERROR: Patchwork instance and project are unset."
+   echo "Please setup ${HOME}/.pwmon-rc and set pw_project "
+   echo "(or pass it as an argument)."
+   echo "Also either setup pw_instance or pass it as an argument."
+   exit 1
+fi
+
+userpw=""
+
+if [ "$1" != "" ]; then
+    pw_credential="$1"
+    shift
+fi
+
+if [ "X$pw_credential" != "X" ]; then
+   userpw="-u \"${pw_credential}\""
+fi
+
+source $(dirname $0)/series_db_lib.sh
+
+pushd $output_dir
+
+SERIES_LINE=$(get_series_line "$pw_instance" "$pw_project" "$series_id")
+
+SERIES_URL=$(echo $SERIES_LINE | cut -d'|' -f1)
+
+echo "[*] Pulling series info ($SERIES_URL)..."
+series_info=$(curl -s -f "$SERIES_URL")
+
+COVER_LETTER_URL=$(echo "$series_info" | jq -rc '.cover_letter.url')
+if [ "$COVER_LETTER_URL" != "" -a "$COVER_LETTER_URL" != "null" -a "$pull_coverletter" == "yes" ]; then
+    COVER_LETTER_MBOX=$(echo "$series_info" | jq -rc '.mbox')
+    echo "[*] Pulling cover-letter ($COVER_LETTER_URL)..."
+    curl -s -f "$COVER_LETTER_MBOX" -o coverletter.mbox
+fi
+
+PATCHES=$(echo "$series_info" | jq -rc '.patches[].url')
+
+I=0
+for patch in $PATCHES; do
+    echo "[*] Pulling patch ${I}..."
+    curl -s -f "$patch" -o ${I}.json
+    PATCH_MBOX=$(jq -rc '.mbox' ${I}.json)
+    curl -s -f "$PATCH_MBOX" -o ${I}.mbox
+    I=$((I+1))
+done
+
+popd

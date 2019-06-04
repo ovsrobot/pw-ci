@@ -1,0 +1,54 @@
+#!/bin/bash
+# SPDX-Identifier: gpl-2.0-or-later
+# Copyright (C) 2019, Red Hat, Inc.
+#
+# Monitors a travis build history for builds in a series
+# Records the builds in the series database (and emits them on the
+# stdout line for processing)
+#
+# Licensed under the terms of the GNU General Public License as published
+# by the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.  You may obtain a copy of the
+# license at
+#
+#    https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[ -f "${HOME}/.travis-rc" ] && source "${HOME}/.travis-rc"
+[ -f "${HOME}/.pwmon-rc" ] && source "${HOME}/.pwmon-rc"
+
+source $(dirname $0)/travis_lib.sh
+source $(dirname $0)/series_db_lib.sh
+
+if [ "$1" != "" ]; then
+    pw_instance="$1"
+    shift
+fi
+
+if [ "$1" != "" ]; then
+    travis_api_server="$1"
+    shift
+fi
+
+if [ "$1" != "" ]; then
+    travis_credential="$1"
+    shift
+fi
+
+for branch in $(series_get_active_branches "$pw_instance"); do
+    series_id=$(echo $branch | cut -d\| -f1)
+    project=$(echo $branch | cut -d\| -f2)
+    series_url=$(echo $branch | cut -d\| -f3)
+    branchname=$(echo $branch | cut -d\| -f4)
+    travis_repo=$(echo $branch | cut -d\| -f5)
+
+    travis_builds_for_branch "$travis_api_server" "$travis_credential" "$travis_repo" "$branchname" | while IFS=, read -r build_shasum build_state start_time end_time; do
+        echo "Build for patch:$build_shasum is $build_state"
+    done
+    
+done

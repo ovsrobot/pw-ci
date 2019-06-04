@@ -58,6 +58,25 @@ ALTER TABLE series ADD COLUMN series_downloaded INTEGER;
 EOF
         run_db_command "INSERT INTO series_schema_version(id) values (3);"
     fi
+
+    # 0004 - travis information
+    run_db_command "select * from series_schema_version;" | egrep '^4$' >/dev/null 2>&1
+    if [ $? -eq 1 ]; then
+        sqlite3 ${HOME}/.series-db <<EOF
+CREATE TABLE travis_build (
+pw_series_id INTEGER,
+pw_series_instance TEXT,
+travis_api_server TEXT,
+travis_repo TEXT,
+travis_branch TEXT,
+travis_sha TEXT,
+pw_patch_url TEXT
+);
+ALTER TABLE series ADD COLUMN series_branch TEXT;
+ALTER TABLE series ADD COLUMN series_repo TEXT;
+EOF
+        run_db_command "INSERT INTO series_schema_version(id) values (4);"
+    fi
 }
 
 function series_db_exists() {
@@ -128,6 +147,15 @@ function get_uncompleted_jobs_as_line() {
     series_db_exists
 
     echo "select series_id,series_url,series_submitter,series_email from series where series_instance=\"$instance\" and series_project=\"$project\" and series_completed=\"0\" and series_submitted=\"false\" and series_downloaded=\"0\";" | series_db_execute
+}
+
+function get_series_line() {
+    local instance="$1"
+    local project="$2"
+
+    series_db_exists
+
+    echo "select series_url,series_submitter,series_email from series where series_id=\"$3\" and series_instance=\"$instance\";" | series_db_execute
 }
 
 function get_undownloaded_jobs_as_line() {
@@ -209,4 +237,28 @@ function series_id_clear_downloaded() {
 
     series_id_clear_submitted "$instance" "$id"
     echo "update series set series_downloaded=\"0\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+}
+
+function series_get_active_branches() {
+    local instance="$1"
+
+    series_db_exists
+
+    echo "select series_id,series_project,series_url,series_branch,series_repo from series where series_instance=\"$instance\" and series_branch is not null and series_branch != \"\";" | series_db_execute
+}
+
+function series_activate_branch() {
+    local instance="$1"
+    local id="$2"
+    local repo="$3"
+    local branchname="$4"
+
+    echo "update series set series_branch=\"$branchname\",series_repo=\"$repo\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+}
+
+function series_clear_branch() {
+    local instance="$1"
+    local id="$2"
+
+    echo "update series set series_branch=\"\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
 }
