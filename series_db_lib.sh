@@ -77,6 +77,15 @@ ALTER TABLE series ADD COLUMN series_repo TEXT;
 EOF
         run_db_command "INSERT INTO series_schema_version(id) values (4);"
     fi
+
+    # 0005 - travis information
+    run_db_command "select * from series_schema_version;" | egrep '^5$' >/dev/null 2>&1
+    if [ $? -eq 1 ]; then
+        sqlite3 ${HOME}/.series-db <<EOF
+ALTER TABLE SERIES ADD COLUMN series_sha TEXT;
+EOF
+        run_db_command "INSERT INTO series_schema_version(id) values (5);"
+    fi
 }
 
 function series_db_exists() {
@@ -227,6 +236,17 @@ function series_id_set_downloaded() {
     echo "update series set series_downloaded=\"2\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
 }
 
+function series_id_set_sha() {
+    local instance="$1"
+    local id="$2"
+
+    if ! series_id_exists "$instance" "$id"; then
+        return 0
+    fi
+
+    echo "update series set series_sha=\"$3\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+}
+
 function series_id_clear_downloaded() {
     local instance="$1"
     local id="$2"
@@ -261,4 +281,11 @@ function series_clear_branch() {
     local id="$2"
 
     echo "update series set series_branch=\"\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+}
+
+function series_by_sha() {
+    local instance="$1"
+    local sha="$2"
+
+    echo "select series_url,series_submitter,series_email from series where series_sha=\"$sha\" and series_instance=\"$instance\";" | series_db_execute
 }

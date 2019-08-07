@@ -40,15 +40,53 @@ if [ "$1" != "" ]; then
     shift
 fi
 
+function submit_result() {
+    echo "Build for Sha: $6 is $1"
+}
+
+function process_build() {
+    local pw_instance="$1"
+    local pw_project="$2"
+    local series_id="$3"
+    local series_url="$4"
+    local series_sha="$5"
+    local build_state="$6"
+
+    if [ "$build_state" == "created" ]; then
+        # ignore new builds
+        return
+    fi
+    
+    if [ "$build_state" == "errored" ]; then
+        echo "restart this one"
+        return
+    fi
+
+    if [ "$build_state" == "failed" -o "$build_state" == "passed" ]; then
+        submit_result "$build_state" "$pw_instance" "$pw_project" "$series_id" \
+                      "$series_url" "$series_sha"
+        return
+    fi
+}
+
 for branch in $(series_get_active_branches "$pw_instance"); do
     series_id=$(echo $branch | cut -d\| -f1)
     project=$(echo $branch | cut -d\| -f2)
     series_url=$(echo $branch | cut -d\| -f3)
-    branchname=$(echo $branch | cut -d\| -f4)
-    travis_repo=$(echo $branch | cut -d\| -f5)
+    travis_repo=$(echo $branch | cut -d\| -f4)
+    branchname=$(echo $branch | cut -d\| -f5)
 
-    travis_builds_for_branch "$travis_api_server" "$travis_credential" "$travis_repo" "$branchname" | while IFS=, read -r build_shasum build_state start_time end_time; do
-        echo "Build for patch:$build_shasum is $build_state"
+    travis_builds_for_branch "$travis_api_server" "$travis_credential" "$travis_repo" \
+                             "$branchname" | \
+        while IFS=, read -r build_shasum build_state start_time end_time; do
+
+        # try to go by series first
+        echo Checking series $series_id
+        SERIES_LINE=$(series_by_sha "$pw_instance" "$build_shasum")
+        if [ "$SERIES_LINE" != "" ]; then
+            process_build "$pw_instance" "$project" "$series_id" "$series_url" \
+                          "$build_shasum" "$build_state"
+        fi
     done
     
 done

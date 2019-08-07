@@ -48,4 +48,3 @@ function travis_builds_for_branch() {
     travis_request "${TRAVIS_API_SERVER}" "${TRAVIS_CREDENTIAL}" \
                    "repo/${TRAVIS_REPO}/builds?branch.name=${TRAVIS_BRANCH}" | jq -rc '.builds[] | .commit.sha+","+.state+","+.started_at+","+.finished_at'
 }
-
