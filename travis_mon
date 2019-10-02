@@ -41,7 +41,7 @@ if [ "$1" != "" ]; then
 fi
 
 function submit_result() {
-    echo "Build for Sha: $6 is $1"
+    echo "pw:$2:build:$4:sha:$6:$1"
 }
 
 function process_build() {
@@ -53,7 +53,7 @@ function process_build() {
     local build_state="$6"
 
     if [ "$build_state" == "created" ]; then
-        # ignore new builds
+        echo "started"
         return
     fi
     
@@ -62,7 +62,13 @@ function process_build() {
         return
     fi
 
+    if [ "$build_state" == "canceled" ]; then
+        echo "cancel"
+        return
+    fi
+
     if [ "$build_state" == "failed" -o "$build_state" == "passed" ]; then
+        echo "submit..."
         submit_result "$build_state" "$pw_instance" "$pw_project" "$series_id" \
                       "$series_url" "$series_sha"
         return
@@ -82,11 +88,8 @@ for branch in $(series_get_active_branches "$pw_instance"); do
 
         # try to go by series first
         echo Checking series $series_id
-        SERIES_LINE=$(series_by_sha "$pw_instance" "$build_shasum")
-        if [ "$SERIES_LINE" != "" ]; then
-            process_build "$pw_instance" "$project" "$series_id" "$series_url" \
-                          "$build_shasum" "$build_state"
-        fi
+        process_build "$pw_instance" "$project" "$series_id" "$series_url" \
+                      "$build_shasum" "$build_state"
     done
-    
+
 done
