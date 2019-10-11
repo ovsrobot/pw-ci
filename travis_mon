@@ -52,22 +52,16 @@ function process_build() {
     local series_sha="$5"
     local build_state="$6"
 
+    echo "build state [$build_state]"
     if [ "$build_state" == "created" ]; then
-        echo "started"
-        return
-    fi
-    
-    if [ "$build_state" == "errored" ]; then
-        echo "restart this one"
         return
     fi
 
     if [ "$build_state" == "canceled" ]; then
-        echo "cancel"
         return
     fi
 
-    if [ "$build_state" == "failed" -o "$build_state" == "passed" ]; then
+    if [ "$build_state" == "failed" -o "$build_state" == "passed" -o "$build_state" == "errored" ]; then
         echo "submit..."
         submit_result "$build_state" "$pw_instance" "$pw_project" "$series_id" \
                       "$series_url" "$series_sha"

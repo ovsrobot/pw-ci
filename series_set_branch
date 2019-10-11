@@ -32,7 +32,10 @@ if [ "$1" != "" ]; then
     shift
 fi
 
-if [ "$1" != "" ]; then
+if [ "$1" == "--clear" -o "$1" == "-c" ]; then
+    series_branch=""
+    shift
+elif [ "$1" != "" ]; then
     series_branch="$1"
     shift
 fi
@@ -47,6 +50,10 @@ echo "ID:     $series_id"
 if ! series_id_exists "$pw_instance" "$series_id"; then
     echo "ERROR: not found on instance $pw_instance"
     exit 1
-fi
+fi    
 
-series_activate_branch "$pw_instance" "$series_id" "$series_branch" "$series_repo"
+if [ "X$series_branch" != "X" ]; then
+    series_activate_branch "$pw_instance" "$series_id" "$series_branch" "$series_repo"
+else
+    series_clear_branch "$pw_instance" "$series_id"
+fi
