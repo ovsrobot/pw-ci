@@ -289,3 +289,22 @@ function series_by_sha() {
 
     echo "select series_url,series_submitter,series_email from series where series_sha=\"$sha\" and series_instance=\"$instance\";" | series_db_execute
 }
+
+function travis_add_sha() {
+    local instance="$1"
+    local sha="$2"
+    local series_id="$3"
+    local travis_api_server="$4"
+    local travis_repo="$5"
+    local travis_branch="$6"
+    local patch_id="$7"
+
+    echo "insert into travis_build(pw_series_id,pw_series_instance,travis_api_server,travis_repo,travis_branch,travis_sha,pw_patch_url) values (${series_id}, \"${instance}\", \"${travis_api_server}\", \"${travis_repo}\", \"${travis_branch}\", \"${sha}\", \"${patch_id}\");" | series_db_execute
+}
+
+function patch_id_by_sha() {
+    local instance="$1"
+    local sha="$2"
+
+    echo "select patch_id from travis_build where pw_series_instance=\"$instance\" and travis_sha=\"$sha\";" | series_db_execute
+}

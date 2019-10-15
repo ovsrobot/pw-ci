@@ -41,7 +41,7 @@ if [ "$1" != "" ]; then
 fi
 
 function submit_result() {
-    echo "pw:$2:build:$4:sha:$6:$1"
+    echo "pw|$2|build|$4|sha|$6|$1|$7|$8"
 }
 
 function process_build() {
@@ -51,6 +51,8 @@ function process_build() {
     local series_url="$4"
     local series_sha="$5"
     local build_state="$6"
+    local build_url="$7"
+    local subj="$8"
 
     echo "build state [$build_state]"
     if [ "$build_state" == "created" ]; then
@@ -64,7 +66,7 @@ function process_build() {
     if [ "$build_state" == "failed" -o "$build_state" == "passed" -o "$build_state" == "errored" ]; then
         echo "submit..."
         submit_result "$build_state" "$pw_instance" "$pw_project" "$series_id" \
-                      "$series_url" "$series_sha"
+                      "$series_url" "$series_sha" "$build_url" "$subj"
         return
     fi
 }
@@ -78,12 +80,12 @@ for branch in $(series_get_active_branches "$pw_instance"); do
 
     travis_builds_for_branch "$travis_api_server" "$travis_credential" "$travis_repo" \
                              "$branchname" | \
-        while IFS=, read -r build_shasum build_state start_time end_time; do
+        while IFS=\| read -r build_shasum build_state start_time end_time build_url subj; do
 
         # try to go by series first
         echo Checking series $series_id
         process_build "$pw_instance" "$project" "$series_id" "$series_url" \
-                      "$build_shasum" "$build_state"
+                      "$build_shasum" "$build_state" "$build_url" "$subj"
     done
 
 done
