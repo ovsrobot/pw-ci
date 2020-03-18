@@ -145,6 +145,9 @@ for patch in $(jq -rc &apos;.patches[].url&apos; info.json); do
     if echo $patch_subject | grep -o &apos;net-next&apos; &gt;/dev/null 2&gt;&amp;1; then
         touch skip.done
     fi
+    if echo $patch_subject | egrep -o -i &quot;[a-zA-Z0-9/, ]*ovn[a-zA-Z0-9/, ]*\]&quot; | grep -io ovn &gt;/dev/null 2&gt;&amp;1; then
+        touch skip2.done
+    fi
     if echo $patch_subject | egrep -o &apos;branch-[0-9]+\.[0-9]+&apos; &gt;/dev/null 2&gt;&amp;1; then
         cp utilities/checkpatch.py ./safe_checkpatch.py
         git checkout $(echo &quot;$patch_subject&quot; | egrep -o &apos;branch-[0-9]+\.[0-9]+&apos;)
@@ -165,6 +168,11 @@ for patch in $(jq -rc &apos;.patches[].url&apos; info.json); do
 done
 
 ./series_downloaded patchwork.ozlabs.org ${SERIES_ID}
+
+if [ -f skip2.done ]; then
+        git clone https://github.com/ovn-org/ovn.git OVN
+        cp *.patch OVN
+fi
 </command>
     </hudson.tasks.Shell>
     <hudson.tasks.Shell>
@@ -177,6 +185,25 @@ IFS=&quot;$OLD_IFS&quot;
 
 if [ -f skip.done ]; then
    exit 0
+fi
+
+if [ &quot;X${UPLOAD_GIT_REPO}&quot; == &quot;X&quot; ]; then
+    UPLOAD_GIT_REPO=git@github.com:ovsrobot/ovs.git
+fi
+
+if [ -f skip2.done ]; then
+    UPLOAD_GIT_REPO=git@github.com:ovsrobot/ovn.git
+    cp utilities/checkpatch.py OVN/utilities/
+    cp tmp.email.txt OVN/
+    cd OVN
+
+    git config user.name &quot;0-day Robot&quot;
+    git config user.email &quot;$ROBO_EMAIL&quot;
+    git config sendemail.smtpserver &quot;$SMTP_SERVER&quot;
+    git config sendemail.smtpuser &quot;$SMTP_USER&quot;
+    git config sendemail.smtppass &quot;$SMTP_PASSWORD&quot;
+    git config sendemail.smtpserverport &quot;$SMTP_SERVERPORT&quot;
+    git config sendemail.smtpencryption &quot;$SMTP_ENCRYPTION&quot;
 fi
 
 if [ &quot;$UPLOAD_GIT_REPO&quot; ]; then
@@ -271,7 +298,7 @@ $(tail -n25 tmp.build.log)
       echo &quot;$ERRORS&quot; &gt;&gt; email.txt
       IFS=&quot;$OLD_IFS&quot;
       echo &quot;&quot; &gt;&gt; email.txt
-      echo &quot;Please check this out.  If you feel there has been an error, please email aconole@bytheb.org&quot; &gt;&gt; email.txt
+      echo &quot;Please check this out.  If you feel there has been an error, please email aconole@redhat.com&quot; &gt;&gt; email.txt
       echo &quot;&quot; &gt;&gt; email.txt
       echo &quot;Thanks,&quot; &gt;&gt; email.txt
       echo &quot;0-day Robot&quot; &gt;&gt; email.txt
@@ -279,6 +306,10 @@ $(tail -n25 tmp.build.log)
       git send-email --suppress-from --cc=&quot;dev@openvswitch.org&quot; email.txt
    fi
 done
+
+if [ -f skip2.done ]; then
+   touch skip.done
+fi
 </command>
     </hudson.tasks.Shell>
     <hudson.tasks.Shell>
