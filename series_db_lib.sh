@@ -1,6 +1,7 @@
 #!/bin/sh
 # SPDX-Identifier: gpl-2.0-or-later
 # Copyright (C) 2018,2019 Red Hat, Inc.
+# Copyright (C) 2020 PANTHEON.tech s.r.o.
 #
 # Licensed under the terms of the GNU General Public License as published
 # by the Free Software Foundation; either version 2 of the License, or
@@ -86,6 +87,17 @@ ALTER TABLE SERIES ADD COLUMN series_sha TEXT;
 EOF
         run_db_command "INSERT INTO series_schema_version(id) values (5);"
     fi
+
+    # 0006 - OBS information
+    run_db_command "select * from series_schema_version;" | egrep '^6$' >/dev/null 2>&1
+    if [ $? -eq 1 ]; then
+        sqlite3 ${HOME}/.series-db <<EOF
+ALTER TABLE SERIES ADD COLUMN series_obs_project TEXT;
+EOF
+        run_db_command "INSERT INTO series_schema_version(id) values (6);"
+    fi
+
+
 }
 
 function series_db_exists() {
@@ -195,7 +207,7 @@ function series_id_clear_submitted() {
     if ! series_id_exists "$instance" "$id"; then
         return 0
     fi
-    
+
     echo "update series set series_submitted=\"false\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
     return 0
 }
@@ -264,7 +276,7 @@ function series_get_active_branches() {
 
     series_db_exists
 
-    echo "select series_id,series_project,series_url,series_branch,series_repo from series where series_instance=\"$instance\" and series_branch is not null and series_branch != \"\";" | series_db_execute
+    echo "select series_id,series_project,series_url,series_branch,series_repo,series_obs_project from series where series_instance=\"$instance\" and series_branch is not null and series_branch != \"\";" | series_db_execute
 }
 
 function series_activate_branch() {
@@ -272,8 +284,9 @@ function series_activate_branch() {
     local id="$2"
     local repo="$3"
     local branchname="$4"
+    local obs_project="$5"
 
-    echo "update series set series_branch=\"$branchname\",series_repo=\"$repo\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+    echo "update series set series_branch=\"$branchname\",series_repo=\"$repo\",series_obs_project=\"$obs_project\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
 }
 
 function series_clear_branch() {

@@ -1,0 +1,105 @@
+#!/bin/bash
+# SPDX-Identifier: gpl-2.0-or-later
+# Copyright (C) 2020 PANTHEON.tech s.r.o.
+#
+# Monitors Suse OBS build history for builds in a series
+# Records the builds in the series database (and emits them on the
+# stdout line for processing)
+#
+# The script assumes that the osc OBS utility has been installed
+# Installation instructions:
+# https://software.opensuse.org/download/package?package=osc&project=openSUSE%3ATools
+#
+# Licensed under the terms of the GNU General Public License as published
+# by the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.  You may obtain a copy of the
+# license at
+#
+#    https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[ -f "${HOME}/.pwmon-rc" ] && source "${HOME}/.pwmon-rc"
+
+source $(dirname $0)/obs_lib.sh
+source $(dirname $0)/series_db_lib.sh
+
+if [ "$1" != "" ]; then
+    pw_instance="$1"
+    shift
+fi
+
+if [ "$1" != "" ]; then
+    obs_user="$1"
+    shift
+fi
+
+if [ "$1" != "" ]; then
+    obs_password="$1"
+    shift
+fi
+
+function submit_result() {
+    echo "pw|$1|$2|$3|$4"
+}
+
+function process_build() {
+    local series_id="$1"
+    local build_state="$2"
+    local build_state_details="$3"
+    local build_url="$4"
+
+    echo "build state [$build_state]"
+    if [ "$build_state" == "scheduled" ]; then
+        return
+    fi
+
+    if [ "$build_state" == "building" ]; then
+        return
+    fi
+
+    if [ "$build_state" == "failed" -o "$build_state" == "succeeded" -o "$build_state" == "errored" ]; then
+        echo "submit..."
+        submit_result "$series_id" "$build_state" "$build_state_details" "$build_url"
+        return
+    fi
+}
+
+mkdir -p ~/.config/osc
+cat << EOF > ~/.config/osc/oscrc
+[general]
+apiurl = https://api.opensuse.org
+build-jobs = 2
+no_verify = 1
+[https://api.opensuse.org]
+aliases = obs
+user=${obs_user}
+pass=${obs_password}
+credentials_mgr_class=osc.credentials.PlaintextConfigFileCredentialsManager
+EOF
+
+echo "looking for active branches"
+
+for branch in $(series_get_active_branches "$pw_instance"); do
+    series_id=$(echo $branch | cut -d\| -f1)
+    branchname=$(echo $branch | cut -d\| -f5)
+    obs_project=$(echo $branch | cut -d\| -f6)
+
+    echo "found active branch $branch"
+    echo "getting results from $obs_project $branchname"
+
+    obs_results_for_package "$obs_project" "$branchname" | \
+        while IFS=\| read -r build_state build_state_details build_url; do
+
+        # try to go by series first
+        echo Checking series $series_id
+        echo "with details ${build_state_details}"
+        echo "and url ${build_url}"
+        process_build "$series_id" "$build_state" "$build_state_details" "$build_url"
+    done
+
+done
