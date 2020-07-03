@@ -1,7 +1,17 @@
 FROM openjdk:8-jdk
 
 RUN apt-get update && apt-get install -y git curl gcc libbsd-dev libpcap-dev libcrypto++-dev libjansson4 jq make git-email libnuma-dev gawk python3-pip ninja-build
-RUN python3.5 -m pip install --upgrade meson
+RUN python3 -m pip install --upgrade meson
+
+# SUSE osc install needed for OBS
+RUN apt-get update \
+    && apt-get install -y software-properties-common \
+    && add-apt-repository "deb http://download.opensuse.org/repositories/openSUSE:/Tools/Debian_10/ /" \
+    && wget -nv https://download.opensuse.org/repositories/openSUSE:Tools/Debian_10/Release.key -O /root/Release.key \
+    && apt-key add /root/Release.key \
+    && apt-get update \
+    && apt-get install -y osc python-m2crypto libssl-dev swig \
+    && python3 -m pip install M2Crypto
 
 ARG user=jenkins
 ARG group=jenkins

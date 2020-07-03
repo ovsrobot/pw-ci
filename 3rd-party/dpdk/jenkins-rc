@@ -5,5 +5,5 @@ jenkins_token="Insert a token here"
 
 jenkins_DPDK_job=dpdk-job
 jenkins_DPDK_token=authentication-token
-jenkins_DPDK_variables="SERIES_ID:series_id SERIES_URL:series_url SUBMITTER:series_submitter_name SUBMITTER_EMAIL:series_submitter_email ROBO_EMAIL:robot_email SMTP_SERVER:server_host SMTP_USER:username SMTP_PASSWORD:password SMTP_SERVERPORT:port SMTP_ENCRYPTION:(SSL,TLS,STARTTLS,etc.) UPLOAD_GIT_REPO:repo_url"
+jenkins_DPDK_variables="SERIES_ID:series_id SERIES_URL:series_url SUBMITTER:series_submitter_name SUBMITTER_EMAIL:series_submitter_email ROBO_EMAIL:robot_email SMTP_SERVER:server_host SMTP_USER:username SMTP_PASSWORD:password SMTP_SERVERPORT:port SMTP_ENCRYPTION:(SSL,TLS,STARTTLS,etc.) UPLOAD_GIT_REPO:repo_url OBS_USER:user OBS_PASSWORD:password OBS_TARGET_PROJECT:obs_project OBS_SOURCE_PROJECT:home:bluca:dpdk OBS_SOURCE_PACKAGE:dpdk OBS_GIT_URL:https://github.com/ovsrobot/dpdk.git"
 pw_project="DPDK"

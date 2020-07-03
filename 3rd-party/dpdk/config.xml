@@ -81,6 +81,41 @@
           <defaultValue></defaultValue>
           <trim>false</trim>
         </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>OBS_USER</name>
+          <description>OBS uploader username</description>
+          <defaultValue></defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.PasswordParameterDefinition>
+          <name>OBS_PASSWORD</name>
+          <description>OBS uploader password</description>
+          <defaultValue></defaultValue>
+        </hudson.model.PasswordParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>OBS_TARGET_PROJECT</name>
+          <description>OBS per-series project where the packages will be built</description>
+          <defaultValue></defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>OBS_SOURCE_PROJECT</name>
+          <description>OBS project containing the package containing the rpm and deb build files</description>
+          <defaultValue></defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>OBS_SOURCE_PACKAGE</name>
+          <description>OBS package containing the rpm and deb build files</description>
+          <defaultValue></defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>OBS_GIT_URL</name>
+          <description>Url of the git repository which OBS will clone</description>
+          <defaultValue></defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
       </parameterDefinitions>
     </hudson.model.ParametersDefinitionProperty>
   </properties>
@@ -154,10 +189,12 @@ if [ -f skip.done ]; then
    exit 0
 fi
 
-if [ &quot;$UPLOAD_GIT_REPO&quot; ]; then
-   git remote add upload_repo &quot;$UPLOAD_GIT_REPO&quot;
+series_branch=series_${SERIES_ID}
+
+if [ &quot;${UPLOAD_GIT_REPO}" ]; then
+   git remote add upload_repo &quot;${UPLOAD_GIT_REPO}&quot;
    git remote update
-   git checkout -b &quot;series_${SERIES_ID}&quot;
+   git checkout -b &quot;${series_branch}&quot;
 fi
 
 #set up checkpatch. checkpatch will check code styling and common spelling errors in comments
@@ -193,7 +230,7 @@ for patch in *.patch; do
        rm tmp.checkpatch.log
 
        if [ &quot;$UPLOAD_GIT_REPO&quot; ]; then
-          git push -u upload_repo &quot;series_${SERIES_ID}&quot;
+          git push -u upload_repo &quot;${series_branch}&quot;
        fi
 
        # now configure the system
@@ -232,6 +269,34 @@ for patch in *.patch; do
       exit_status=1
    fi
 done
+
+# configure OSC
+mkdir -p ~/.config/osc
+cat &lt;&lt; EOF &gt; ~/.config/osc/oscrc
+[general]
+apiurl = https://api.opensuse.org
+build-jobs = 2
+no_verify = 1
+[https://api.opensuse.org]
+aliases = obs
+user=${OBS_USER}
+pass=${OBS_PASSWORD}
+credentials_mgr_class=osc.credentials.PlaintextConfigFileCredentialsManager
+EOF
+
+# branch the original OBS dpdk OBS package
+osc branch ${OBS_SOURCE_PROJECT} ${OBS_SOURCE_PACKAGE} ${OBS_TARGET_PROJECT} ${series_branch}
+# checkout
+osc co ${OBS_TARGET_PROJECT}/${series_branch}
+# don&apos;t publish or use packages for other builds
+#osc api -X POST &quot;/source/${OBS_TARGET_PROJECT}/${series_branch}?cmd=set_flag&amp;flag=publish&amp;status=disable&quot;
+#osc api -X POST &quot;/source/${OBS_TARGET_PROJECT}/${series_branch}?cmd=set_flag&amp;flag=useforbuild&amp;status=disable&quot;
+cd ${OBS_TARGET_PROJECT}/${series_branch}
+# change branch
+sed -i &quot;s#&lt;param name=\&quot;revision\&quot;&gt;.*&lt;/param&gt;#&lt;param name=\&quot;revision\&quot;&gt;${series_branch}&lt;/param&gt;#&quot; _service
+sed -i &quot;s#&lt;param name=\&quot;url\&quot;&gt;.*&lt;/param&gt;#&lt;param name=\&quot;url\&quot;&gt;${OBS_GIT_URL}&lt;/param&gt;#&quot; _service
+# updload the branch - this starts the build
+osc api -X PUT -T _service /source/${OBS_TARGET_PROJECT}/${series_branch}/_service
 
 exit $exit_status</command>
     </hudson.tasks.Shell>
