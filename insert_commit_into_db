@@ -1,0 +1,69 @@
+#!/bin/bash
+# SPDX-Identifier: gpl-2.0-or-later
+# Copyright (C) 2021, Red Hat, Inc.
+#
+# Inserts SERIES_ID, patch_id, patch_url, patch_name, and sha into db so
+# that github_mon is able to get build status on a patch by patch basis.
+#
+# Licensed under the terms of the GNU General Public License as published
+# by the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.  You may obtain a copy of the
+# license at
+#
+#    https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[ -f "$(dirname $0)/series_db_lib.sh" ] && source "$(dirname $0)/series_db_lib.sh"
+
+if [ "X" = "X$SERIES_ID" ]; then
+    SERIES_ID="$1"
+    shift
+fi
+
+if [ "X" = "X$patch_id" ]; then
+    patch_id="$1"
+    shift
+fi
+
+if [ "X" = "X$patch_url" ]; then
+    patch_url="$1"
+    shift
+fi
+
+if [ "X" = "X$patch_name" ]; then
+    patch_name="$1"
+    shift
+fi
+
+if [ "X" = "X$sha" ]; then
+    sha="$1"
+    shift
+fi
+
+if [ "X" = "X$pw_instance" ]; then
+    pw_instance="$1"
+    shift
+fi
+
+if [ "X" = "X$project" ]; then
+    project="$1"
+    shift
+fi
+
+if [ "X" = "X$repo_name" ]; then
+    repo_name="$1"
+    shift
+fi
+
+if [ "X" = "X$SERIES_ID" -o "X" = "X$patch_id" -o "X" = "X$patch_url" -o "X" = "X$patch_name" -o \
+"X" = "X$sha" -o "X" = "X$pw_instance"  -o "X" = "X$project" -o "X" = "X$repo_name" ]; then
+    echo "Missing arguments to $0. Nothing pushed to database. Exiting" 1>&2
+    exit 1
+fi
+
+insert_commit "$SERIES_ID" "$patch_id" "$patch_url" "$patch_name" "$sha" "$pw_instance" "$project" "$repo_name"

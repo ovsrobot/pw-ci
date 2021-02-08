@@ -1,0 +1,104 @@
+#!/bin/bash
+# SPDX-Identifier: gpl-2.0-or-later
+# Copyright (C) 2021, Red Hat, Inc.
+#
+# Monitors a github build history for builds in a series.
+# Records the builds in the series database (and emits them on the
+# stdout line for processing)
+#
+# Licensed under the terms of the GNU General Public License as published
+# by the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.  You may obtain a copy of the
+# license at
+#
+#    https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[ -f "$(dirname $0)/series_db_lib.sh" ] && source "$(dirname $0)/series_db_lib.sh"
+[ -f "${HOME}/.github_actions_mon_rc" ] && source "${HOME}/.github_actions_mon_rc"
+[ -f "${HOME}/.pwmon-rc" ] && source "${HOME}/.pwmon-rc"
+
+if [ "X" = "X$pw_instance" ]; then
+    pw_instance="$1"
+    shift
+fi
+
+if [ "X" = "X$github_token" ]; then
+    github_token="$1"
+    shift
+fi
+
+if [ "X" = "X$pw_instance" -o "X" = "X$github_token" ]; then
+    echo "pw_instance or github_token were not set." 1>&2
+    echo -n "These can be passed as an argument or set in " 1>&2
+    echo "${HOME}/.github_actions_mon_rc. Exiting" 1>&2
+    exit 1
+fi
+
+AUTH="Authorization: token ${github_token}"
+APP="Accept: application/vnd.github.v3+json"
+GITHUB_API="https://api.github.com"
+
+make_result_for_series () {
+
+    series_id="$1"
+    patch_id="$2"
+    patch_url="$3"
+    patch_name="$4"
+    sha="$5"
+
+    # Get run metadata
+    select="select(.head_branch==\"series_${series_id}\") | select(.head_sha==\"${sha}\")"
+    headers="{status, conclusion, html_url}"
+    run_meta="$(echo "$runs" | jq ".workflow_runs[] | $select | $headers")"
+
+    if [ "$(echo "$run_meta" | jq -r ".status")" != "completed" ]; then
+        echo "patch_id=$patch_id belonging to series_id=$series_id not completed. Skipping" 1>&2
+        return 2
+    fi
+
+    # success/failure?
+    result="$(echo "$run_meta" | jq -r ".conclusion")"
+    build_url="$(echo "$run_meta" | jq -r ".html_url")"
+
+    if [ "$result" == "success" ]; then
+        result="passed"
+    else
+        result="failed"
+    fi
+
+    set_synced_patch "$patch_id" "$pw_instance"
+    echo "pw|$pw_instance|build|$series_id|SHA|$sha|$result|$build_url|$patch_name"
+}
+
+prev_series=""
+
+get_unsynced_series "$pw_instance" | \
+while IFS="|" read -r series_id patch_id patch_url patch_name sha patchwork_instance patchwork_project repo_name gap_sync; do
+
+    if [ "X$series_id" != "X$prev_series" ]; then
+        prev_series="$series_id"
+
+        # Get GHA runs
+        tmp_url="$GITHUB_API/repos/$repo_name/actions/runs?branch=series_$series_id&per_page=100"
+        runs="$(curl -s -S -H "${AUTH}" -H "${APP}" "${tmp_url}")"
+        not_found="$(echo "$runs" | jq -rc ".message")"
+    fi
+
+    if [ "$not_found" == "Not Found" ]; then
+        echo "\"$tmp_url\" could not be reached." 1>&2
+        continue
+    fi
+
+    if [ "$not_found" == "Bad credentials" ]; then
+        echo "Bad credentials - could not authenticate. \"$tmp_url\" could not be reached." 1>&2
+        continue
+    fi
+
+    make_result_for_series "$series_id" "$patch_id" "$patch_url" "$patch_name" "$sha"
+done

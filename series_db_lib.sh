@@ -86,6 +86,24 @@ ALTER TABLE SERIES ADD COLUMN series_sha TEXT;
 EOF
         run_db_command "INSERT INTO series_schema_version(id) values (5);"
     fi
+
+    # 0006 - patch data for github and patchwork sync
+    run_db_command "select * from series_schema_version;" | egrep '^6$' >/dev/null 2>&1
+    if [ $? -eq 1 ]; then
+        sqlite3 ${HOME}/.series-db <<EOF
+CREATE TABLE git_builds (
+series_id INTEGER,
+patch_id INTEGER,
+patch_url STRING,
+patch_name STRING,
+sha STRING,
+patchwork_instance STRING,
+patchwork_project STRING,
+repo_name STRING,
+gap_sync INTEGER);
+EOF
+        run_db_command "INSERT INTO series_schema_version(id) values (6);"
+    fi
 }
 
 function series_db_exists() {
@@ -307,4 +325,46 @@ function patch_id_by_sha() {
     local sha="$2"
 
     echo "select patch_id from travis_build where pw_series_instance=\"$instance\" and travis_sha=\"$sha\";" | series_db_execute
+}
+
+function get_unsynced_series() {
+    local instance="$1"
+
+    series_db_exists
+
+    echo "select * from git_builds where patchwork_instance=\"$instance\" and gap_sync=0 order by series_id;" | series_db_execute
+}
+
+function set_synced_patch() {
+    local patch_id="$1"
+    local instance="$2"
+
+    series_db_exists
+
+    echo "update git_builds set gap_sync=1 where patchwork_instance=\"$instance\" and patch_id=$patch_id;" | series_db_execute
+}
+
+function insert_commit() {
+    local SERIES_ID="$1"
+    local patch_id="$2"
+    local patch_url="$3"
+    local patch_name="$4"
+    local sha="$5"
+    local instance="$6"
+    local project="$7"
+    local repo_name="$8"
+
+    series_db_exists
+
+    echo "INSERT INTO git_builds (series_id, patch_id, patch_url, patch_name, sha, patchwork_instance, patchwork_project, repo_name, gap_sync) VALUES($SERIES_ID, $patch_id, \"$patch_url\", \"$patch_name\", \"$sha\", \"$instance\", \"$project\", \"$repo_name\", 0);" | series_db_execute
+}
+
+function get_patch_id_by_series_id_and_sha() {
+    local series_id="$1"
+    local sha="$2"
+    local instance="$3"
+
+    series_db_exists
+
+    echo "select patch_id from git_builds where patchwork_instance=\"$instance\" and series_id=$series_id and sha=\"$sha\";" | series_db_execute
 }

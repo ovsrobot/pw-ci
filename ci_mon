@@ -1,0 +1,168 @@
+#!/bin/bash
+# SPDX-Identifier: gpl-2.0-or-later
+# Copyright (C) 2021, Red Hat, Inc.
+#
+# Generate and send a test-report email
+#
+# Licensed under the terms of the GNU General Public License as published
+# by the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.  You may obtain a copy of the
+# license at
+#
+#    https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[ -f "${HOME}/.pwmon-rc" ] && source "${HOME}/.pwmon-rc"
+[ -f "${HOME}/.cimon-rc" ] && source "${HOME}/.cimon-rc"
+
+source $(dirname $0)/series_db_lib.sh
+
+if [ '!' "X" = "X$*" ]; then
+  while [ $# -gt 0 ];
+  do
+      if [ "$1" = "--help" ]; then
+          echo "$0: monitor supported CI systems"
+          echo ""
+          echo "Command to generate test report emails from various CI providers"
+          echo "and generate / send a report email."
+          echo ""
+          echo "USAGE:"
+          echo "  $0 [options]"
+          echo "Options:"
+          echo "  --help                 This help message"
+          echo "  --pw-instance          Patchwork instance"
+          echo "  --from                 From email address"
+          echo "  --to                   To email address**"
+          echo "  --dry-run              pass --dry-run to git send-email"
+          echo "  --*-token              Set a token for various CI monitors"
+          echo "  --disable-*            Skips running the provided CI monitor"
+          exit 0
+      fi
+      if [ "X" = "X$pw_cli_instance" ]; then
+          STRTMP=`echo "$1" | sed 's@.*--pw-instance=@@'`
+          if [ "$STRTMP" != "$1" ]; then
+              pw_cli_instance=$STRTMP
+          fi
+      fi
+      if [ "X" = "X$from_addr" ]; then
+          STRTMP=`echo "$1" | sed 's@.*--from=@@'`
+          if [ "$STRTMP" != "$1" ]; then
+              from_addr=$STRTMP
+          fi
+      fi
+      if [ "X" = "X$to_addr" ]; then
+          STRTMP=`echo "$1" | sed 's@.*--to=@@'`
+          if [ "$STRTMP" != "$1" ]; then
+              to_addr=$STRTMP
+          fi
+      fi
+      if [ "X" = "X$dry_run" ]; then
+          STRTMP=`echo "$1" | sed 's@.*--dry-run@@'`
+          if [ "$STRTMP" != "$1" ]; then
+              dry_run="--dry-run"
+          fi
+      fi
+      if echo $1 | grep ".*--[a-zA-Z]*-token=" >/dev/null 2>/dev/null; then
+          token_name=`echo $1 | sed -e 's@-token=.*@@' -e 's@^--@@'`
+          token_name="$token_name"_token
+          token_val=`echo $1 | sed -e 's@--[a-zA-Z]*-token=@@'`
+          eval $token_name=\$token_val
+      fi
+      if echo $1 | grep ".*--disable-[a-zA-Z]*" >/dev/null 2>/dev/null; then
+          disable_name=$(echo $1 | sed -e 's@.*--disable-@@')
+          disable_name=disable_${disable_name}
+          disable_val=yes
+          eval $disable_name=\$disable_val
+      fi
+      shift
+  done
+fi
+
+if [ "X" != "X$pw_cli_instance" ]; then
+   pw_instance=$pw_cli_instance
+fi
+
+if [ "X" = "X$pw_instance" ]; then
+   echo "ERROR: Patchwork instance is unset."
+   echo "Please setup ${HOME}/.pwmon-rc and set pw_instance"
+   echo "(or pass it as an argument)."
+   echo "Use '--help' option for more information"
+   exit 1
+fi
+
+for I in travis github; do
+
+    token=${I}_token
+    disable=disable_${I}
+
+    if [ "X${!disable}" = "Xyes" ]; then
+        continue
+    fi
+
+    ./${I}_mon $pw_instance ${!token} | grep "^pw|" | while IFS="|" \
+        read -r PW pw_chk_instance BUILD series_id SHA shasum result build_url series_name; do
+
+        SERIES_LINE=$(./series_get $pw_chk_instance $series_id)
+        sid=$(echo $SERIES_LINE | cut -d\| -f1)
+        proj=$(echo $SERIES_LINE | cut -d\| -f2)
+        url=$(echo $SERIES_LINE | cut -d\| -f3)
+        author=$(echo $SERIES_LINE | cut -d\| -f4)
+        email=$(echo $SERIES_LINE | cut -d\| -f5)
+        repo_name=$(echo $SERIES_LINE | cut -d\| -f10)
+
+        PATCHDATA=$(curl -s $url)
+
+        patch_id="$(get_patch_id_by_series_id_and_sha "$series_id" "$shasum" "$pw_chk_instance")"
+        PATCHDATA="$(echo "$PATCHDATA" | jq ".patches[] | select(.id==$patch_id)")"
+
+        patch_url=$(echo $PATCHDATA | jq -rc '.mbox' | sed -e 's@/mbox/$@@' -e 's@patchwork.@@')
+        message_id=$(echo $PATCHDATA | jq -rc '.msgid')
+
+        if [ "$result" == "passed" ]; then
+            RESULT="SUCCESS"
+        elif [ "$result" == "failed" ]; then
+            RESULT="FAILURE"
+        else
+            RESULT="WARNING"
+        fi
+
+        echo "(clear result for series_$series_id with $RESULT at url $build_url on patch $patch_id)"
+
+        echo "To: $to_addr" > report.eml
+        echo "From: $from_addr" >> report.eml
+
+        if [ "$RESULT" != "SUCCESS" ]; then
+            echo "Cc: $email" >> report.eml
+        fi
+
+        echo "Subject: |$RESULT| pw$patch_id $series_name" >> report.eml
+        echo "Date: $(date +"%a, %e %b %Y %T %::z")" >> report.eml
+        echo "In-Reply-To: $message_id" >> report.eml
+        echo "References: $message_id" >> report.eml
+        echo "" >> report.eml
+
+        echo "Test-Label: ${I}-robot" >> report.eml
+        echo "Test-Status: $RESULT" >> report.eml
+        echo "$patch_url" >> report.eml
+        echo "" >> report.eml
+        echo "_${I} build: ${result}_" >> report.eml
+        echo "Build URL: $build_url" >> report.eml
+
+        if [ -f ./${I}_get_logs.sh ]; then
+            ./${I}_get_logs.sh "$repo_name" "$series_id" "$shasum" "${!token}" >> report.eml
+        fi
+
+        if [ "$RESULT" != "SUCCESS" ]; then
+            SENDCC="--cc=$email"
+        fi
+
+        git send-email $dry_run --suppress-from --to="$to_addr" $SENDCC report.eml
+        ./series_set_branch $pw_instance $series_id
+
+    done
+done
