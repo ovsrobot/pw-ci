@@ -31,14 +31,11 @@ if [ "$1" != "" ]; then
 fi
 
 if [ "$1" != "" ]; then
-    travis_api_server="$1"
-    shift
-fi
-
-if [ "$1" != "" ]; then
     travis_credential="$1"
     shift
 fi
+
+travis_api_server="api.travis-ci.com"
 
 function submit_result() {
     echo "pw|$2|build|$4|sha|$6|$1|$7|$8"
