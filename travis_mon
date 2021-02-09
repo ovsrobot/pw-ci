@@ -81,6 +81,7 @@ for branch in $(series_get_active_branches "$pw_instance"); do
 
         # try to go by series first
         echo Checking series $series_id
+        build_url=$(echo $build_url | sed 's@/build/@https://travis-ci.com/ovsrobot/dpdk/builds/@')
         process_build "$pw_instance" "$project" "$series_id" "$series_url" \
                       "$build_shasum" "$build_state" "$build_url" "$subj"
     done
