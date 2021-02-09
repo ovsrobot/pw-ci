@@ -118,6 +118,9 @@ for I in travis github; do
         PATCHDATA=$(curl -s $url)
 
         patch_id="$(get_patch_id_by_series_id_and_sha "$series_id" "$shasum" "$pw_chk_instance")"
+        if [ "X$patch_id" == "X" ]; then
+            patch_id=$(echo $PATCHDATA | jq -rc '.patches[-1].id')
+        fi
         PATCHDATA="$(echo "$PATCHDATA" | jq ".patches[] | select(.id==$patch_id)")"
 
         patch_url=$(echo $PATCHDATA | jq -rc '.mbox' | sed -e 's@/mbox/$@@' -e 's@patchwork.@@')
