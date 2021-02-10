@@ -126,12 +126,17 @@ print_errored_logs_for_commit () {
     echo "--------------------------------END LOGS-----------------------------"
 }
 
+repo_name=$(echo "$repo_name" | sed -e 's@%2F@/@g' -e 's,%40,@,g')
+
 # Get GHA runs
 tmp_url="$GITHUB_API/repos/$repo_name/actions/runs?branch=series_$series_id&per_page=100"
 runs="$(curl -s -S -H "${AUTH}" -H "${APP}" "${tmp_url}")"
 not_found="$(echo "$runs" | jq -rc ".message")"
-if [ "$not_found" != "Not Found" ]
-then
+if [ "$not_found" == "Not Found" ]; then
+    echo "\"$tmp_url\" could not be reached." 1>&2
+elif [ "$not_found" == "Bad credentials" ]; then
+    echo "Bad credentials - could not authenticate with token ${github_token}. \"$tmp_url\" could not be reached." 1>&2
+else
     print_errored_logs_for_commit
 fi
 

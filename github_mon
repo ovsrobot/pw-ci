@@ -96,7 +96,7 @@ while IFS="|" read -r series_id patch_id patch_url patch_name sha patchwork_inst
     fi
 
     if [ "$not_found" == "Bad credentials" ]; then
-        echo "Bad credentials - could not authenticate. \"$tmp_url\" could not be reached." 1>&2
+        echo "Bad credentials - could not authenticate with token ${github_token}. \"$tmp_url\" could not be reached." 1>&2
         continue
     fi
 
