@@ -345,7 +345,7 @@ function set_synced_patch() {
 }
 
 function insert_commit() {
-    local SERIES_ID="$1"
+    local series_id="$1"
     local patch_id="$2"
     local patch_url="$3"
     local patch_name="$4"
@@ -356,7 +356,7 @@ function insert_commit() {
 
     series_db_exists
 
-    echo "INSERT INTO git_builds (series_id, patch_id, patch_url, patch_name, sha, patchwork_instance, patchwork_project, repo_name, gap_sync) VALUES($SERIES_ID, $patch_id, \"$patch_url\", \"$patch_name\", \"$sha\", \"$instance\", \"$project\", \"$repo_name\", 0);" | series_db_execute
+    echo "INSERT INTO git_builds (series_id, patch_id, patch_url, patch_name, sha, patchwork_instance, patchwork_project, repo_name, gap_sync) VALUES($series_id, $patch_id, \"$patch_url\", \"$patch_name\", \"$sha\", \"$instance\", \"$project\", \"$repo_name\", 0);" | series_db_execute
 }
 
 function get_patch_id_by_series_id_and_sha() {

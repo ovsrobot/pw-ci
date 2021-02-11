@@ -20,8 +20,8 @@
 
 [ -f "$(dirname $0)/series_db_lib.sh" ] && source "$(dirname $0)/series_db_lib.sh"
 
-if [ "X" = "X$SERIES_ID" ]; then
-    SERIES_ID="$1"
+if [ "X" = "X$series_id" ]; then
+    series_id="$1"
     shift
 fi
 
@@ -60,10 +60,10 @@ if [ "X" = "X$repo_name" ]; then
     shift
 fi
 
-if [ "X" = "X$SERIES_ID" -o "X" = "X$patch_id" -o "X" = "X$patch_url" -o "X" = "X$patch_name" -o \
+if [ "X" = "X$series_id" -o "X" = "X$patch_id" -o "X" = "X$patch_url" -o "X" = "X$patch_name" -o \
 "X" = "X$sha" -o "X" = "X$pw_instance"  -o "X" = "X$project" -o "X" = "X$repo_name" ]; then
     echo "Missing arguments to $0. Nothing pushed to database. Exiting" 1>&2
     exit 1
 fi
 
-insert_commit "$SERIES_ID" "$patch_id" "$patch_url" "$patch_name" "$sha" "$pw_instance" "$project" "$repo_name"
+insert_commit "$series_id" "$patch_id" "$patch_url" "$patch_name" "$sha" "$pw_instance" "$project" "$repo_name"
