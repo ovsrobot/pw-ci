@@ -38,7 +38,7 @@ fi
 travis_api_server="api.travis-ci.com"
 
 function submit_result() {
-    echo "pw|$2|build|$4|sha|$6|$1|$7|$8"
+    echo "pw|$2|build|$4|sha|$6|$1|$7|$8|$9"
 }
 
 function process_build() {
@@ -50,6 +50,7 @@ function process_build() {
     local build_state="$6"
     local build_url="$7"
     local subj="$8"
+    local travis_repo="$9"
 
     echo "build state [$build_state]"
     if [ "$build_state" == "created" ]; then
@@ -63,7 +64,7 @@ function process_build() {
     if [ "$build_state" == "failed" -o "$build_state" == "passed" -o "$build_state" == "errored" ]; then
         echo "submit..."
         submit_result "$build_state" "$pw_instance" "$pw_project" "$series_id" \
-                      "$series_url" "$series_sha" "$build_url" "$subj"
+                      "$series_url" "$series_sha" "$build_url" "$subj" "$travis_repo"
         series_clear_branch "$pw_instance" "$series_id"
         return
     fi
@@ -84,7 +85,7 @@ for branch in $(series_get_active_branches "$pw_instance"); do
         echo Checking series $series_id
         build_url=$(echo $build_url | sed 's@/build/@https://travis-ci.com/ovsrobot/dpdk/builds/@')
         process_build "$pw_instance" "$project" "$series_id" "$series_url" \
-                      "$build_shasum" "$build_state" "$build_url" "$subj"
+                      "$build_shasum" "$build_state" "$build_url" "$subj" "$travis_repo"
     done
 
 done

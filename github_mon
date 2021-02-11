@@ -51,6 +51,7 @@ make_result_for_series () {
     patch_url="$3"
     patch_name="$4"
     sha="$5"
+    repo_name="$6"
 
     # Get run metadata
     select="select(.head_branch==\"series_${series_id}\") | select(.head_sha==\"${sha}\")"
@@ -73,7 +74,7 @@ make_result_for_series () {
     fi
 
     set_synced_patch "$patch_id" "$pw_instance"
-    echo "pw|$pw_instance|build|$series_id|SHA|$sha|$result|$build_url|$patch_name"
+    echo "pw|$pw_instance|build|$series_id|SHA|$sha|$result|$build_url|$patch_name|$repo_name"
 }
 
 prev_series=""
@@ -100,5 +101,5 @@ while IFS="|" read -r series_id patch_id patch_url patch_name sha patchwork_inst
         continue
     fi
 
-    make_result_for_series "$series_id" "$patch_id" "$patch_url" "$patch_name" "$sha"
+    make_result_for_series "$series_id" "$patch_id" "$patch_url" "$patch_name" "$sha" "$repo_name"
 done

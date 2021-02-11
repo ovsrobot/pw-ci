@@ -105,7 +105,7 @@ for I in travis github; do
     fi
 
     ./${I}_mon $pw_instance ${!token} | grep "^pw|" | while IFS="|" \
-        read -r PW pw_chk_instance BUILD series_id SHA shasum result build_url series_name; do
+        read -r PW pw_chk_instance BUILD series_id SHA shasum result build_url series_name repo_name; do
 
         SERIES_LINE=$(./series_get $pw_chk_instance $series_id)
         sid=$(echo $SERIES_LINE | cut -d\| -f1)
@@ -113,7 +113,6 @@ for I in travis github; do
         url=$(echo $SERIES_LINE | cut -d\| -f3)
         author=$(echo $SERIES_LINE | cut -d\| -f4)
         email=$(echo $SERIES_LINE | cut -d\| -f5)
-        repo_name=$(echo $SERIES_LINE | cut -d\| -f10)
 
         PATCHDATA=$(curl -s $url)
 
