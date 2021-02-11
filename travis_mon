@@ -64,6 +64,7 @@ function process_build() {
         echo "submit..."
         submit_result "$build_state" "$pw_instance" "$pw_project" "$series_id" \
                       "$series_url" "$series_sha" "$build_url" "$subj"
+        series_clear_branch "$pw_instance" "$series_id"
         return
     fi
 }

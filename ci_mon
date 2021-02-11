@@ -165,7 +165,6 @@ for I in travis github; do
         fi
 
         git send-email $dry_run --suppress-from --to="$to_addr" $SENDCC report.eml
-        ./series_set_branch $pw_instance $series_id
 
     done
 done
