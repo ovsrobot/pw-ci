@@ -41,4 +41,4 @@ if ! series_id_exists "$pw_instance" "$1"; then
     exit 1
 fi
 
-echo "select * from series where series_id=$1 and series_instance=$pw_instance;" | series_db_execute | head -n1
+echo "select * from series where series_id=$1 and series_instance=\"$pw_instance\";" | series_db_execute | head -n1
