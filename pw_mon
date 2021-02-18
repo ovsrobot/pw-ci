@@ -102,15 +102,17 @@ function check_new_series() {
     SINCE=$(echo $TRY_DATE | sed 's@ @%20@')
     STAMP=$(date --date="$STAMP_DATE" '+%C%y%m%d%H%M')
 
-    GET_URL="http://${INSTANCE}/api/1.0/series/?project=${PROJECT}&since=${SINCE}"
+    GET_URL="http://${INSTANCE}/api/series/?project=${PROJECT}&since=${SINCE}"
 
     response=$(curl -s "$userpw" "$GET_URL")
 
     series_info=$(echo "$response" | jq -rc '.[] | (.id|tostring) + ";" + .url + ";" + .submitter.name + ";" + .submitter.email + ";" + (.received_all|tostring)')
 
-    echo "$series_info" | while IFS=\; read -r id url submitter_name submitter_email all; do
-        emit_series "${INSTANCE}" "${PROJECT}" "$id" "$url" "$submitter_name" "$submitter_email" "$all"
-    done
+    if [ "X$series_info" != "X" ]; then
+        echo "$series_info" | while IFS=\; read -r id url submitter_name submitter_email all; do
+            emit_series "${INSTANCE}" "${PROJECT}" "$id" "$url" "$submitter_name" "$submitter_email" "$all"
+        done
+    fi
 
     touch -m -t "${STAMP}" "${HOME}/.pwmon-${INSTANCE}-${PROJECT}-series"
 }
@@ -143,9 +145,11 @@ function check_superseded_series() {
         local patch_state=$(curl -s "$userpw" "$last_patch_url" | jq -rc '.state')
 
         # now check to see if the patch should even be reported...
-        if [ "$patch_state" = "superseded" -o "$patch_state" = "rejected" -o "$patch_state" = "accepted" ]; then
+        if [ "$patch_state" = "superseded" -o "$patch_state" = "rejected" -o "$patch_state" = "accepted" \
+             -o "$patch_state" = "changes-requested" -o "$patch_state" = "not-applicable" ]; then
             series_clear_branch "$pw_instance" "$series_id"
         fi
+        echo "Worked on $series_id : state $patch_state"
     done
 }
 
