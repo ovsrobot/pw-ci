@@ -23,6 +23,7 @@
 source $(dirname $0)/series_db_lib.sh
 
 disable_dummy=yes
+dummy_token="1111"
 
 if [ '!' "X" = "X$*" ]; then
   while [ $# -gt 0 ];
@@ -69,6 +70,12 @@ if [ '!' "X" = "X$*" ]; then
               dry_run="--dry-run"
           fi
       fi
+      if [ "X" = "X$pw_project" ]; then
+          STRTMP=`echo "$1" | sed 's@.*--pw-project=@@'`
+          if [ "$STRTMP" != "$1" ]; then
+              pw_project=$STRTMP
+          fi
+      fi
       if echo $1 | grep ".*--[a-zA-Z]*-token=" >/dev/null 2>/dev/null; then
           token_name=`echo $1 | sed -e 's@-token=.*@@' -e 's@^--@@'`
           token_name="$token_name"_token
@@ -109,7 +116,7 @@ for I in travis github dummy; do
         continue
     fi
 
-    ./${I}_mon $pw_instance ${!token} | grep "^pw|" | while IFS="|" \
+    ./${I}_mon $pw_instance ${!token} "$pw_project" | grep "^pw|" | while IFS="|" \
         read -r PW pw_chk_instance BUILD series_id SHA shasum result build_url series_name repo_name; do
 
         SERIES_LINE=$(./series_get $pw_instance $series_id)

@@ -35,6 +35,12 @@ if [ "$1" != "" ]; then
     shift
 fi
 
+pw_project=""
+if [ "$1" != "" ]; then
+    pw_project="$1"
+    shift
+fi
+
 travis_api_server="api.travis-ci.com"
 
 function submit_result() {
@@ -76,6 +82,10 @@ for branch in $(series_get_active_branches "$pw_instance"); do
     series_url=$(echo $branch | cut -d\| -f3)
     travis_repo=$(echo $branch | cut -d\| -f4)
     branchname=$(echo $branch | cut -d\| -f5)
+
+    if [ "X$pw_project" != "X" -a "X$pw_project" != "X$project" ]; then
+        continue
+    fi
 
     travis_builds_for_branch "$travis_api_server" "$travis_credential" "$travis_repo" \
                              "$branchname" | \

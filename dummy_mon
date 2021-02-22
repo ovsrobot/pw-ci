@@ -27,8 +27,18 @@ if [ "$1" != "" ]; then
     shift
 fi
 
+if [ "$1" != "" ]; then
+    # skip token
+    shift
+fi
+
+if [ "$1" != "" ]; then
+    pw_project="$1"
+    shift
+fi
+
 date=$(date)
-echo "Starting dummy at $date" > dummy.log
+echo "Starting dummy for [$pw_project @ $pw_instance] at $date" > dummy.log
 
 for branch in $(series_get_active_branches "$pw_instance"); do
     series_id=$(echo $branch | cut -d\| -f1)
@@ -36,6 +46,10 @@ for branch in $(series_get_active_branches "$pw_instance"); do
     series_url=$(echo $branch | cut -d\| -f3)
     travis_repo=$(echo $branch | cut -d\| -f4)
     branchname=$(echo $branch | cut -d\| -f5)
+
+    if [ "X$pw_project" != "X" -a "X$pw_project" != "X$project" ]; then
+        continue
+    fi
 
     echo "Caught [$series_id]|[$series_url]" >> dummy.log
     

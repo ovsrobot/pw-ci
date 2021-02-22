@@ -33,6 +33,11 @@ if [ "X" = "X$github_token" ]; then
     shift
 fi
 
+if [ "X" = "X$pw_project" -a "X$1" != "X" ]; then
+    pw_project="$1"
+    shift
+fi
+
 if [ "X" = "X$pw_instance" -o "X" = "X$github_token" ]; then
     echo "pw_instance or github_token were not set." 1>&2
     echo -n "These can be passed as an argument or set in " 1>&2
@@ -81,6 +86,10 @@ prev_series=""
 
 get_unsynced_series "$pw_instance" | \
 while IFS="|" read -r series_id patch_id patch_url patch_name sha patchwork_instance patchwork_project repo_name gap_sync; do
+
+    if [ "X$pw_project" != "X" -a "X$pw_project" != "X$patchwork_project"]; then
+        continue
+    fi
 
     if [ "X$series_id" != "X$prev_series" ]; then
         prev_series="$series_id"
