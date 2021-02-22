@@ -22,6 +22,8 @@
 
 source $(dirname $0)/series_db_lib.sh
 
+disable_dummy=yes
+
 if [ '!' "X" = "X$*" ]; then
   while [ $# -gt 0 ];
   do
@@ -79,6 +81,9 @@ if [ '!' "X" = "X$*" ]; then
           disable_val=yes
           eval $disable_name=\$disable_val
       fi
+      if echo $1 | grep ".*--enable-dummy" >/dev/null 2>/dev/null; then
+          disable_dummy=no
+      fi
       shift
   done
 fi
@@ -95,7 +100,7 @@ if [ "X" = "X$pw_instance" ]; then
    exit 1
 fi
 
-for I in travis github; do
+for I in travis github dummy; do
 
     token=${I}_token
     disable=disable_${I}
@@ -122,7 +127,7 @@ for I in travis github; do
         fi
         PATCHDATA="$(echo "$PATCHDATA" | jq ".patches[] | select(.id==$patch_id)")"
 
-        patch_url=$(echo $PATCHDATA | jq -rc '.mbox' | sed -e 's@/mbox/$@@' -e 's@patchwork.@@')
+        patch_url=$(echo $PATCHDATA | jq -rc '.url')
         message_id=$(echo $PATCHDATA | jq -rc '.msgid')
 
         if [ "$result" == "passed" ]; then
