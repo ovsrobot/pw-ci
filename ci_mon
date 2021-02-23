@@ -146,6 +146,12 @@ for I in travis github dummy; do
         PATCHDATA="$(echo "$PATCHDATA" | jq ".patches[] | select(.id==$patch_id)")"
 
         patch_url=$(echo $PATCHDATA | jq -rc '.url' | sed -e "$patch_url_regex")
+        if [ "X$patch_url_regex" != "Xq" ]; then
+            old_url=$(echo $PATCHDATA | jq -rc '.url')
+            
+            echo "(patch url '$old_url' transform by '$patch_url_regex' to '$patch_url')"
+        fi
+
         message_id=$(echo $PATCHDATA | jq -rc '.msgid')
 
         if [ "$result" == "passed" ]; then
