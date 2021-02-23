@@ -87,7 +87,7 @@ prev_series=""
 get_unsynced_series "$pw_instance" | \
 while IFS="|" read -r series_id patch_id patch_url patch_name sha patchwork_instance patchwork_project repo_name gap_sync; do
 
-    if [ "X$pw_project" != "X" -a "X$pw_project" != "X$patchwork_project"]; then
+    if [ "X$pw_project" != "X" -a "X$pw_project" != "X$patchwork_project" ]; then
         continue
     fi
 
