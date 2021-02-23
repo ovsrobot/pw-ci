@@ -28,7 +28,7 @@ if [ "$1" != "" ]; then
 fi
 
 if [ "$1" != "" ]; then
-    # skip token
+    dummy_token="$1"
     shift
 fi
 
@@ -52,5 +52,9 @@ for branch in $(series_get_active_branches "$pw_instance"); do
     fi
 
     echo "Caught [$series_id]|[$series_url]" >> dummy.log
-    
+
+    if [ "X$dummy_token" = "Xemit" ]; then
+        echo "pw|${pw_instance}|build|${series_id}|sha|AAAAAAAAAAAA|passed|http://foo.com/${project}/${series_id}|.... subject ....|dummy%Frepo"
+    fi
+
 done

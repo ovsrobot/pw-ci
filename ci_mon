@@ -25,6 +25,9 @@ source $(dirname $0)/series_db_lib.sh
 disable_dummy=yes
 dummy_token="1111"
 
+#default is to 'quit' the sed script
+patch_url_regex='q'
+
 if [ '!' "X" = "X$*" ]; then
   while [ $# -gt 0 ];
   do
@@ -44,6 +47,8 @@ if [ '!' "X" = "X$*" ]; then
           echo "  --dry-run              pass --dry-run to git send-email"
           echo "  --*-token              Set a token for various CI monitors"
           echo "  --disable-*            Skips running the provided CI monitor"
+          echo "  --enable-dummy         Runs the 'dummy' module"
+          echo "  --patch-url-filter=    Applies a regex filter to the patch URL"
           exit 0
       fi
       if [ "X" = "X$pw_cli_instance" ]; then
@@ -74,6 +79,12 @@ if [ '!' "X" = "X$*" ]; then
           STRTMP=`echo "$1" | sed 's@.*--pw-project=@@'`
           if [ "$STRTMP" != "$1" ]; then
               pw_project=$STRTMP
+          fi
+      fi
+      if echo $1 | grep ".*--patch-url-filter=" >/dev/null 2>/dev/null; then
+          STRTMP=`echo "$1" | sed 's@.*--patch-url-filter=@@'`
+          if [ "$STRTMP" != "$1" ]; then
+              patch_url_regex="$STRTMP"
           fi
       fi
       if echo $1 | grep ".*--[a-zA-Z]*-token=" >/dev/null 2>/dev/null; then
@@ -134,7 +145,7 @@ for I in travis github dummy; do
         fi
         PATCHDATA="$(echo "$PATCHDATA" | jq ".patches[] | select(.id==$patch_id)")"
 
-        patch_url=$(echo $PATCHDATA | jq -rc '.url')
+        patch_url=$(echo $PATCHDATA | jq -rc '.url' | sed -e "$patch_url_regex")
         message_id=$(echo $PATCHDATA | jq -rc '.msgid')
 
         if [ "$result" == "passed" ]; then
