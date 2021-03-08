@@ -148,6 +148,7 @@ function check_superseded_series() {
         if [ "$patch_state" = "superseded" -o "$patch_state" = "rejected" -o "$patch_state" = "accepted" \
              -o "$patch_state" = "changes-requested" -o "$patch_state" = "not-applicable" ]; then
             series_clear_branch "$pw_instance" "$series_id"
+            set_synced_for_series "$series_id" "$pw_instance"
         fi
         echo "Worked on $series_id : state $patch_state"
     done

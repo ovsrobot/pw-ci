@@ -344,6 +344,15 @@ function set_synced_patch() {
     echo "update git_builds set gap_sync=1 where patchwork_instance=\"$instance\" and patch_id=$patch_id;" | series_db_execute
 }
 
+function set_synced_for_series() {
+    local series_id="$1"
+    local instance="$2"
+
+    series_db_exists
+
+    echo "update git_builds set gap_sync=1 where patchwork_instance=\"$instance\" and series_id=$series_id;" | series_db_execute
+}
+
 function insert_commit() {
     local series_id="$1"
     local patch_id="$2"
