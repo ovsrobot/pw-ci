@@ -154,6 +154,8 @@ for I in travis github dummy; do
 
         message_id=$(echo $PATCHDATA | jq -rc '.msgid')
 
+        SENDCC=""
+
         if [ "$result" == "passed" ]; then
             RESULT="SUCCESS"
         elif [ "$result" == "failed" ]; then
