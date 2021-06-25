@@ -28,6 +28,11 @@ dummy_token="1111"
 #default is to 'quit' the sed script
 patch_url_regex='q'
 
+# default report strings
+RPT_SUCCESS="SUCCESS"
+RPT_FAILURE="FAILURE"
+RPT_WARNING="WARNING"
+
 if [ '!' "X" = "X$*" ]; then
   while [ $# -gt 0 ];
   do
@@ -49,6 +54,10 @@ if [ '!' "X" = "X$*" ]; then
           echo "  --disable-*            Skips running the provided CI monitor"
           echo "  --enable-dummy         Runs the 'dummy' module"
           echo "  --patch-url-filter=    Applies a regex filter to the patch URL"
+          echo "  --report-success=      String to report as success (default: SUCCESS)"
+          echo "  --report-failure=      String to report as success (default: FAILURE)"
+          echo "  --report-warning=      String to report as success (default: WARNING)"
+
           exit 0
       fi
       if [ "X" = "X$pw_cli_instance" ]; then
@@ -101,6 +110,18 @@ if [ '!' "X" = "X$*" ]; then
       fi
       if echo $1 | grep ".*--enable-dummy" >/dev/null 2>/dev/null; then
           disable_dummy=no
+      fi
+      if echo "$1" | grep -- "--report-success=" >/dev/null 2>/dev/null; then
+          STRING=`echo "$1" | sed 's@.*--report-success=@@'`
+          RPT_SUCCESS="$STRING"
+      fi
+      if echo "$1" | grep -- "--report-failure=" >/dev/null 2>/dev/null; then
+          STRING=`echo "$1" | sed 's@.*--report-failure=@@'`
+          RPT_FAILURE="$STRING"
+      fi
+      if echo "$1" | grep -- "--report-warning=" >/dev/null 2>/dev/null; then
+          STRING=`echo "$1" | sed 's@.*--report-warning=@@'`
+          RPT_WARNING="$STRING"
       fi
       shift
   done
@@ -157,11 +178,11 @@ for I in travis github dummy; do
         SENDCC=""
 
         if [ "$result" == "passed" ]; then
-            RESULT="SUCCESS"
+            RESULT="$RPT_SUCCESS"
         elif [ "$result" == "failed" ]; then
-            RESULT="FAILURE"
+            RESULT="$RPT_FAILURE"
         else
-            RESULT="WARNING"
+            RESULT="$RPT_WARNING"
         fi
 
         echo "(clear result for series_$series_id with $RESULT at url $build_url on patch $patch_id)"
@@ -169,7 +190,7 @@ for I in travis github dummy; do
         echo "To: $to_addr" > report.eml
         echo "From: $from_addr" >> report.eml
 
-        if [ "$RESULT" != "SUCCESS" ]; then
+        if [ "$result" != "passed" ]; then
             echo "Cc: $email" >> report.eml
         fi
 
@@ -190,7 +211,7 @@ for I in travis github dummy; do
             ./${I}_get_logs.sh "$repo_name" "$series_id" "$shasum" "${!token}" >> report.eml
         fi
 
-        if [ "$RESULT" != "SUCCESS" ]; then
+        if [ "$result" != "passed" ]; then
             SENDCC="--cc=$email"
         fi
 
