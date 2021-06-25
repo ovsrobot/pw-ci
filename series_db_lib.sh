@@ -16,7 +16,7 @@
 # under the License.
 
 function run_db_command() {
-    echo "$@" | sqlite3 ${HOME}/.series-db 2>/dev/null
+    echo "$@" | sqlite3 -cmd '.timeout 1000' ${HOME}/.series-db 2>/dev/null
 }
 
 function series_db_upgrade() {
