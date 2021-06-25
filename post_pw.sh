@@ -62,7 +62,7 @@ send_post() {
     context="$(echo "$report" | sed -n 's/.*Test-Label: //p')"
     state="$(echo "$report" | sed -n 's/.*Test-Status: //p')"
     description="$(echo "$report" | sed -ne 's/^_\(.*\)_$/\1/p')"
-    patch_id="$(echo "$report" | sed -ne 's@.*href.*/patch/\(.*\)/\?".*@\1@ip' | sed 's@/@@')"
+    patch_id="$(echo "$report" | sed -ne 's@.*href.*/patch[es]*/\(.*\)/\?".*@\1@ip' | sed 's@/@@')"
     target_url="$link"
 
     api_url="${pw_instance}/api/patches/${patch_id}/checks/"
