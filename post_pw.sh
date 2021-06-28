@@ -94,12 +94,12 @@ send_post() {
         return 0
     fi
 
-    data='{\
+    data="{\
         \"state\": \"$state\",\
         \"target_url\": \"$target_url\",\
         \"context\": \"$context\",\
         \"description\": \"$description\"\
-    }'
+    }"
 
     curl -sSf -X POST \
         -H "Authorization: Token ${token}" \
