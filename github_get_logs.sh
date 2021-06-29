@@ -92,9 +92,8 @@ print_errored_logs_for_commit () {
 
     # Print out which jobs failed
     echo "-----------------------Summary of failed steps-----------------------"
-    for job in $(echo "$jobs_results" | jq -r ".[].name")
-    do
-        echo "$job failed at step \"$(echo "$jobs_results" | jq -r ".[] | \
+    echo "$jobs_results" | jq -r ".[].name" | while read -r job; do
+        echo "\"$job\" failed at step \"$(echo "$jobs_results" | jq -r ".[] | \
             select(.name==\"$job\") | .failed_step.name")\""
     done
     echo "----------------------End summary of failed steps--------------------"
@@ -103,7 +102,7 @@ print_errored_logs_for_commit () {
     echo "-------------------------------BEGIN LOGS----------------------------"
     spacing=0
     # Print out logs for failed jobs
-    for job in $(echo "$jobs_results" | jq -r ".[].name"); do
+    echo "$jobs_results" | jq -r ".[].name" | while read -r job; do
         if [ ! "$spacing" -eq "0" ]
         then
             echo -ne "\n\n\n\n"
@@ -111,14 +110,14 @@ print_errored_logs_for_commit () {
 
         step="\"$(echo "$jobs_results" | jq -r ".[] | select(.name==\"$job\") | .failed_step.name")\""
         echo "####################################################################################"
-        echo "#### [Begin job log] $job at step $step"
+        echo "#### [Begin job log] \"$job\" at step $step"
         echo "####################################################################################"
 
         log_number=$(echo "$jobs_results" | jq ".[] | select(.name==\"$job\") | .failed_step.number")
         cat "build_logs_series_$series_id/$job/$log_number"_* | tail -n 25 | cut -d' ' -f2- | sed 's/\r$//'
 
         echo "####################################################################################"
-        echo "#### [End job log] $job at step $step"
+        echo "#### [End job log] \"$job\" at step $step"
         echo "####################################################################################"
 
         spacing=1
