@@ -66,4 +66,6 @@ if [ "X" = "X$series_id" -o "X" = "X$patch_id" -o "X" = "X$patch_url" -o "X" = "
     exit 1
 fi
 
+patch_name=$(echo "$patch_name" | sed 's@"@""@g')
+
 insert_commit "$series_id" "$patch_id" "$patch_url" "$patch_name" "$sha" "$pw_instance" "$project" "$repo_name"
