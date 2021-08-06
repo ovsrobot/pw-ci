@@ -41,8 +41,13 @@ if [ "X" = "X$github_token" ]; then
     shift
 fi
 
-if [ "X" = "X$repo_name" -o "X" = "X$series_id" -o "X" = "X$sha" -o "X" = "X$github_token" ]; then
-    echo "repo_name, series_id, sha or token were not passed in as an arugment. Exiting" 1>&2
+if [ "X" = "X$test_name" ]; then
+    test_name="$1"
+    shift
+fi
+
+if [ "X" = "X$repo_name" -o "X" = "X$series_id" -o "X" = "X$sha" -o "X" = "X$github_token" -o "X" = "X$test_name" ]; then
+    echo "repo_name, series_id, sha, token, or test_name were not passed in as an arugment. Exiting" 1>&2
     exit 1
 fi
 
@@ -61,7 +66,7 @@ GITHUB_API="https://api.github.com"
 print_errored_logs_for_commit () {
 
     # Get run metadata
-    select="select(.head_branch==\"series_${series_id}\") | select(.head_sha==\"${sha}\")"
+    select="select(.head_branch==\"series_${series_id}\") | select(.head_sha==\"${sha}\") | select(.name==\"${test_name}\")"
     headers="{id, logs_url}"
     run_meta="$(echo "$runs" | jq ".workflow_runs[] | $select | $headers")"
 

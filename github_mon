@@ -58,28 +58,43 @@ make_result_for_series () {
     sha="$5"
     repo_name="$6"
 
-    # Get run metadata
+    # Get the name of each respective workflow
+    workflows="$(echo "$runs" | jq -r ".workflow_runs[].name" | sort -u)"
+
+    # Check that workflows have all completed
     select="select(.head_branch==\"series_${series_id}\") | select(.head_sha==\"${sha}\")"
     headers="{status, conclusion, html_url}"
     run_meta="$(echo "$runs" | jq ".workflow_runs[] | $select | $headers")"
 
-    if [ "$(echo "$run_meta" | jq -r ".status")" != "completed" ]; then
+    if [ "$(echo "$run_meta" | jq -r ".status" | sort -u)" != "completed" ]; then
         echo "patch_id=$patch_id belonging to series_id=$series_id not completed. Skipping" 1>&2
         return 2
     fi
 
-    # success/failure?
-    result="$(echo "$run_meta" | jq -r ".conclusion")"
-    build_url="$(echo "$run_meta" | jq -r ".html_url")"
+    # Scan relevant data for each workflow
+    echo "$workflows" | while IFS='\n' read -r WORKFLOWNAME; do
 
-    if [ "$result" == "success" ]; then
-        result="passed"
-    else
-        result="failed"
-    fi
+        # Get run metadata
+        select="select(.head_branch==\"series_${series_id}\") | select(.head_sha==\"${sha}\") | select(.name==\"${WORKFLOWNAME}\")"
+        headers="{status, conclusion, html_url}"
+        run_meta="$(echo "$runs" | jq ".workflow_runs[] | $select | $headers")"
+
+        # success/failure?
+        result="$(echo "$run_meta" | jq -r ".conclusion")"
+        build_url="$(echo "$run_meta" | jq -r ".html_url")"
+
+        if [ "$result" == "success" ]; then
+            result="passed"
+        else
+            result="failed"
+        fi
+
+        test_name=$WORKFLOWNAME
+
+        echo "pw|$pw_instance|build|$series_id|SHA|$sha|$result|$build_url|$patch_name|$repo_name|$test_name"
+    done
 
     set_synced_patch "$patch_id" "$pw_instance"
-    echo "pw|$pw_instance|build|$series_id|SHA|$sha|$result|$build_url|$patch_name|$repo_name"
 }
 
 prev_series=""

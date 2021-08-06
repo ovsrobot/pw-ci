@@ -149,7 +149,7 @@ for I in travis github dummy; do
     fi
 
     ./${I}_mon $pw_instance ${!token} "$pw_project" | grep "^pw|" | while IFS="|" \
-        read -r PW pw_chk_instance BUILD series_id SHA shasum result build_url series_name repo_name; do
+        read -r PW pw_chk_instance BUILD series_id SHA shasum result build_url series_name repo_name test_name; do
 
         SERIES_LINE=$(./series_get $pw_instance $series_id)
         sid=$(echo $SERIES_LINE | cut -d\| -f1)
@@ -200,7 +200,13 @@ for I in travis github dummy; do
         echo "References: $message_id" >> report.eml
         echo "" >> report.eml
 
-        echo "Test-Label: ${I}-robot" >> report.eml
+        if [ "$test_name" != "" ]; then
+            TEST_LABEL="${I}-robot: ${test_name}"
+        else
+            TEST_LABEL="${I}-robot"
+        fi
+
+        echo "Test-Label: $TEST_LABEL" >> report.eml
         echo "Test-Status: $RESULT" >> report.eml
         echo "$patch_url" >> report.eml
         echo "" >> report.eml
@@ -208,7 +214,7 @@ for I in travis github dummy; do
         echo "Build URL: $build_url" >> report.eml
 
         if [ -f ./${I}_get_logs.sh ]; then
-            ./${I}_get_logs.sh "$repo_name" "$series_id" "$shasum" "${!token}" >> report.eml
+            ./${I}_get_logs.sh "$repo_name" "$series_id" "$shasum" "${!token}" "$test_name" >> report.eml
         fi
 
         if [ "$result" != "passed" ]; then
