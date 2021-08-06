@@ -97,28 +97,29 @@ print_errored_logs_for_commit () {
 
     # Print out which jobs failed
     echo "-----------------------Summary of failed steps-----------------------"
-    echo "$jobs_results" | jq -r ".[].name" | while read -r job; do
-        echo "\"$job\" failed at step \"$(echo "$jobs_results" | jq -r ".[] | \
-            select(.name==\"$job\") | .failed_step.name")\""
+        echo "$jobs_results" | jq -r ".[] | .name + \";\" + .failed_step.name " | while IFS=";" \
+        read -r job step; do
+        echo "\"$job\" failed at step $step"
     done
     echo "----------------------End summary of failed steps--------------------"
 
     echo ""
     echo "-------------------------------BEGIN LOGS----------------------------"
     spacing=0
+
     # Print out logs for failed jobs
-    echo "$jobs_results" | jq -r ".[].name" | while read -r job; do
+    echo "$jobs_results" | jq -r ".[] | .name + \";\" + .failed_step.name + \";\" + (.failed_step.number|tostring)" | \
+        while IFS=';' read -r job step log_number; do
+
         if [ ! "$spacing" -eq "0" ]
         then
             echo -ne "\n\n\n\n"
         fi
 
-        step="\"$(echo "$jobs_results" | jq -r ".[] | select(.name==\"$job\") | .failed_step.name")\""
         echo "####################################################################################"
         echo "#### [Begin job log] \"$job\" at step $step"
         echo "####################################################################################"
 
-        log_number=$(echo "$jobs_results" | jq ".[] | select(.name==\"$job\") | .failed_step.number")
         cat "build_logs_series_$series_id/$job/$log_number"_* | tail -n 25 | cut -d' ' -f2- | sed 's/\r$//'
 
         echo "####################################################################################"
