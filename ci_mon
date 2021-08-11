@@ -201,8 +201,7 @@ for I in travis github dummy; do
         echo "" >> report.eml
 
         if [ "$test_name" != "" ]; then
-            test_name=$(echo "${test_name}" | tr ' ' '_')
-            TEST_LABEL="${I}-robot-${test_name}"
+            TEST_LABEL="${I}-robot: ${test_name}"
         else
             TEST_LABEL="${I}-robot"
         fi
