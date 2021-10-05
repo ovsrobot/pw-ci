@@ -139,7 +139,7 @@ if [ "X" = "X$pw_instance" ]; then
    exit 1
 fi
 
-for I in travis github dummy; do
+for I in travis github obs dummy; do
 
     token=${I}_token
     disable=disable_${I}
