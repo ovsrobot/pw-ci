@@ -48,6 +48,7 @@ fi
 AUTH="Authorization: token ${github_token}"
 APP="Accept: application/vnd.github.v3+json"
 GITHUB_API="https://api.github.com"
+ci_instance="gap_sync"
 
 make_result_for_series () {
 
@@ -94,12 +95,12 @@ make_result_for_series () {
         echo "pw|$pw_instance|build|$series_id|SHA|$sha|$result|$build_url|$patch_name|$repo_name|$test_name"
     done
 
-    set_synced_patch "$patch_id" "$pw_instance"
+    set_synced_patch "$patch_id" "$pw_instance" "$ci_instance"
 }
 
 prev_series=""
 
-get_unsynced_series "$pw_instance" | \
+get_unsynced_series "$pw_instance" "$ci_instance" | \
 while IFS="|" read -r series_id patch_id patch_url patch_name sha patchwork_instance patchwork_project repo_name gap_sync; do
 
     if [ "X$pw_project" != "X" -a "X$pw_project" != "X$patchwork_project" ]; then

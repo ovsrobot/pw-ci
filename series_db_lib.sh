@@ -104,6 +104,16 @@ gap_sync INTEGER);
 EOF
         run_db_command "INSERT INTO series_schema_version(id) values (6);"
     fi
+
+    # 0007 - patch data for Open Build Service and Patchwork sync
+    run_db_command "select * from series_schema_version;" | egrep '^7$' >/dev/null 2>&1
+    if [ $? -eq 1 ]; then
+        sqlite3 ${HOME}/.series-db <<EOF
+ALTER TABLE git_builds ADD COLUMN obs_sync INTEGER;
+EOF
+        run_db_command "INSERT INTO series_schema_version(id) values (7);"
+    fi
+
 }
 
 function series_db_exists() {
@@ -329,28 +339,31 @@ function patch_id_by_sha() {
 
 function get_unsynced_series() {
     local instance="$1"
+    local ci_instance="$2"
 
     series_db_exists
 
-    echo "select * from git_builds where patchwork_instance=\"$instance\" and gap_sync=0 order by series_id;" | series_db_execute
+    echo "select * from git_builds where patchwork_instance=\"$instance\" and $ci_instance=0 order by series_id;" | series_db_execute
 }
 
 function set_synced_patch() {
     local patch_id="$1"
     local instance="$2"
+    local ci_instance="$3"
 
     series_db_exists
 
-    echo "update git_builds set gap_sync=1 where patchwork_instance=\"$instance\" and patch_id=$patch_id;" | series_db_execute
+    echo "update git_builds set $ci_instance=1 where patchwork_instance=\"$instance\" and patch_id=$patch_id;" | series_db_execute
 }
 
 function set_synced_for_series() {
     local series_id="$1"
     local instance="$2"
+    local ci_instance="$3"
 
     series_db_exists
 
-    echo "update git_builds set gap_sync=1 where patchwork_instance=\"$instance\" and series_id=$series_id;" | series_db_execute
+    echo "update git_builds set gap_sync=1, obs_sync=1 where patchwork_instance=\"$instance\" and series_id=$series_id;" | series_db_execute
 }
 
 function insert_commit() {
@@ -365,7 +378,7 @@ function insert_commit() {
 
     series_db_exists
 
-    echo "INSERT INTO git_builds (series_id, patch_id, patch_url, patch_name, sha, patchwork_instance, patchwork_project, repo_name, gap_sync) VALUES($series_id, $patch_id, \"$patch_url\", \"$patch_name\", \"$sha\", \"$instance\", \"$project\", \"$repo_name\", 0);" | series_db_execute
+    echo "INSERT INTO git_builds (series_id, patch_id, patch_url, patch_name, sha, patchwork_instance, patchwork_project, repo_name, gap_sync, obs_sync) VALUES($series_id, $patch_id, \"$patch_url\", \"$patch_name\", \"$sha\", \"$instance\", \"$project\", \"$repo_name\", 0, 0);" | series_db_execute
 }
 
 function get_patch_id_by_series_id_and_sha() {
