@@ -23,6 +23,7 @@
 source $(dirname $0)/series_db_lib.sh
 
 disable_dummy=yes
+disable_obs=yes
 dummy_token="1111"
 
 #default is to 'quit' the sed script
