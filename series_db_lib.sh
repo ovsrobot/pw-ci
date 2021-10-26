@@ -152,7 +152,7 @@ function series_db_add_false() {
     local submitter_email="$6"
     local completed="$7"
 
-    echo "insert into series(series_id, series_project, series_url, series_submitter, series_email, series_submitted, series_completed, series_instance) values (${id}, \"${project}\", \"${url}\", \"${submitter_name}\", \"${submitter_email}\", \"false\", \"${completed}\", \"${instance}\");" | series_db_execute
+    echo "insert into series(series_id, series_project, series_url, series_submitter, series_email, series_submitted, series_completed, series_instance, series_downloaded) values (${id}, \"${project}\", \"${url}\", \"${submitter_name}\", \"${submitter_email}\", \"false\", \"${completed}\", \"${instance}\", \"0\");" | series_db_execute
 }
 
 function series_id_exists() {
