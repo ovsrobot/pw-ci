@@ -67,6 +67,10 @@ send_post() {
 
     api_url="${pw_instance}/api/patches/${patch_id}/checks/"
 
+    if [ -z "$description" ]; then
+        description="test: $state"
+    fi
+
     # Skip on missing arguments from email
     if [ -z "$context" -o -z "$state" -o -z "$description" -o -z "$patch_id" ]; then
         echo "Skpping \"$link\" due to missing context, state, description," \
