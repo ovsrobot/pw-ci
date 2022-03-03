@@ -60,7 +60,7 @@ send_post() {
     fi
 
     context="$(echo "$report" | sed -n 's/.*Test-Label: //p' | tr ' ' '_' | tr ':' '-')"
-    state="$(echo "$report" | sed -n 's/.*Test-Status: //p')"
+    state="$(echo "$report" | sed -n 's/.*Test-Status: //p' | xargs)"
     description="$(echo "$report" | sed -ne 's/^_\(.*\)_$/\1/p')"
     patch_id="$(echo "$report" | sed -ne 's@.*href.*/patch[es]*/\(.*\)/\?".*@\1@ip' | sed 's@/@@')"
     target_url="$link"
