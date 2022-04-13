@@ -68,7 +68,7 @@ print_errored_logs_for_commit () {
     # Get run metadata
     select="select(.head_branch==\"series_${series_id}\") | select(.head_sha==\"${sha}\") | select(.name==\"${test_name}\")"
     headers="{id, logs_url}"
-    run_meta="$(echo "$runs" | jq ".workflow_runs[] | $select | $headers")"
+    run_meta="$(echo "$runs" | jq "$select | $headers")"
 
     redirect_url="$(echo "$run_meta" | jq -r ".logs_url")"
     run_id="$(echo "$run_meta" | jq -r ".id")"
@@ -88,7 +88,7 @@ print_errored_logs_for_commit () {
 
     length="$(echo "$jobs_results" | jq -r "length")"
 
-    if [ "$length" -eq "0" ]; then
+    if [ "X$length" == "X" -o "X$length" == "X0" ]; then
         echo "No build failures detected for series_${series_id}/${sha}. Exiting" 1>&2
         return 0
     fi
@@ -134,8 +134,9 @@ print_errored_logs_for_commit () {
 repo_name=$(echo "$repo_name" | sed -e 's@%2F@/@g' -e 's,%40,@,g')
 
 # Get GHA runs
-tmp_url="$GITHUB_API/repos/$repo_name/actions/runs?branch=series_$series_id&per_page=100"
-runs="$(curl -s -S -H "${AUTH}" -H "${APP}" "${tmp_url}")"
+tmp_url="$GITHUB_API/repos/$repo_name/actions/runs?per_page=9000"
+all_runs="$(curl -s -S -H "${AUTH}" -H "${APP}" "${tmp_url}")"
+runs=$(echo $all_runs | jq -rc ".workflow_runs[] | select(.head_branch == \"series_$series_id\")")
 not_found="$(echo "$runs" | jq -rc ".message")"
 if [ "$not_found" == "Not Found" ]; then
     echo "\"$tmp_url\" could not be reached." 1>&2

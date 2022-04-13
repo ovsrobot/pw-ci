@@ -60,12 +60,12 @@ make_result_for_series () {
     repo_name="$6"
 
     # Get the name of each respective workflow
-    workflows="$(echo "$runs" | jq -r ".workflow_runs[].name" | sort -u)"
+    workflows="$(echo "$runs" | jq -r ".name" | sort -u)"
 
     # Check that workflows have all completed
     select="select(.head_branch==\"series_${series_id}\") | select(.head_sha==\"${sha}\")"
     headers="{status, conclusion, html_url}"
-    run_meta="$(echo "$runs" | jq ".workflow_runs[] | $select | $headers")"
+    run_meta="$(echo "$runs" | jq "$select | $headers")"
 
     if [ "$(echo "$run_meta" | jq -r ".status" | sort -u)" != "completed" ]; then
         echo "patch_id=$patch_id belonging to series_id=$series_id not completed. Skipping" 1>&2
@@ -78,7 +78,7 @@ make_result_for_series () {
         # Get run metadata
         select="select(.head_branch==\"series_${series_id}\") | select(.head_sha==\"${sha}\") | select(.name==\"${WORKFLOWNAME}\")"
         headers="{status, conclusion, html_url}"
-        run_meta="$(echo "$runs" | jq ".workflow_runs[] | $select | $headers")"
+        run_meta="$(echo "$runs" | jq "$select | $headers")"
 
         # success/failure?
         result="$(echo "$run_meta" | jq -r ".conclusion")"
@@ -100,6 +100,9 @@ make_result_for_series () {
 
 prev_series=""
 
+prev_url=""
+all_runs=""
+
 get_unsynced_series "$pw_instance" "$ci_instance" | \
 while IFS="|" read -r series_id patch_id patch_url patch_name sha patchwork_instance patchwork_project repo_name gap_sync; do
 
@@ -111,8 +114,13 @@ while IFS="|" read -r series_id patch_id patch_url patch_name sha patchwork_inst
         prev_series="$series_id"
 
         # Get GHA runs
-        tmp_url="$GITHUB_API/repos/$repo_name/actions/runs?branch=series_$series_id&per_page=100"
-        runs="$(curl -s -S -H "${AUTH}" -H "${APP}" "${tmp_url}")"
+        tmp_url="$GITHUB_API/repos/$repo_name/actions/runs?per_page=9000"
+        if [ "$tmp_url" != "$prev_url" ]; then
+            prev_url="$tmp_url"
+            all_runs="$(curl -s -S -H "${AUTH}" -H "${APP}" "${tmp_url}")"
+        fi
+
+        runs=$(echo "$all_runs" | jq -rc ".workflow_runs[] | select(.head_branch == \"series_$series_id\")")
         not_found="$(echo "$runs" | jq -rc ".message")"
     fi
 
