@@ -125,8 +125,8 @@ curl -s -f &quot;$SERIES_URL&quot; &gt; info.json
 
 COVER_LETTER_URL=$(jq -rc &apos;.cover_letter.url&apos; info.json)
 if [ &quot;$COVER_LETTER_URL&quot; != &quot;null&quot; ]; then
-	    COVER_LETTER_MBOX=$(jq -rc &apos;.mbox&apos; info.json)
-        curl -s -f &quot;$COVER_LETTER_MBOX&quot; -o &quot;cover_letter.info&quot;
+    COVER_LETTER_MBOX=$(jq -rc &apos;.mbox&apos; info.json)
+    curl -s -f &quot;$COVER_LETTER_MBOX&quot; -o &quot;cover_letter.info&quot;
 fi
 
 for patch in $(jq -rc &apos;.patches[].url&apos; info.json); do
@@ -164,6 +164,23 @@ fi
 curl -s -o checkpatch.pl &apos;https://raw.githubusercontent.com/torvalds/linux/master/scripts/checkpatch.pl&apos;
 chmod 755 checkpatch.pl
 echo &apos;DPDK_CHECKPATCH_PATH=./checkpatch.pl&apos; &gt; .develconfig
+
+# this series may have a dependency, check the cover letter or the first patch
+if [ -f cover_letter.info ]; then
+   dependency=$(sed -ne &quot;s/^Depends-on: series-\([0-9]*\)/\1/p&quot; cover_letter.info)
+fi
+if [ -z &quot;$dependency&quot; ]; then
+   dependency=$(sed -ne &quot;s/^Depends-on: series-\([0-9]*\)/\1/p&quot; 0001.patch)
+fi
+
+if [ -n &quot;$dependency&quot; ]; then
+   git reset --hard upload_repo/series_$dependency 2&gt;&amp;1 | tee tmp.gitreset.log
+   if egrep -i &apos;fatal&apos; tmp.gitreset.log &gt;/dev/null 2&gt;&amp;1; then
+      echo &quot;&quot; &gt;&gt; ERRORS.log
+      echo &quot;git-reset:&quot; &gt;&gt; ERRORS.log
+      cat tmp.gitreset.log &gt;&gt; ERRORS.log
+   fi
+fi
 
 exit_status=0
 for patch in *.patch; do
