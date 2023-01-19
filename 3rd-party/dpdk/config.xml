@@ -170,7 +170,7 @@ if [ -f cover_letter.info ]; then
    dependency=$(sed -ne &quot;s/^Depends-on: series-\([0-9]*\)/\1/p&quot; cover_letter.info)
 fi
 if [ -z &quot;$dependency&quot; ]; then
-   dependency=$(sed -ne &quot;s/^Depends-on: series-\([0-9]*\)/\1/p&quot; 0001.patch)
+   dependency=$(sed -ne &quot;s/^Depends-on: series-\([0-9]*\)/\1/p&quot; 0000.patch)
 fi
 
 if [ -n &quot;$dependency&quot; ]; then
