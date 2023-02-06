@@ -76,6 +76,8 @@ function emit_series() {
         echo
 
         series_db_add_false "$instance" "$project" "$id" "$url" "$submitter_name" "$submitter_email" "$completed"
+    else
+        echo "series ${id} exists"
     fi
 }
 
@@ -99,17 +101,21 @@ function check_new_series() {
         STAMP_DATE=$(date)
     fi
 
-    SINCE=$(echo $TRY_DATE | sed 's@ @%20@')
     STAMP=$(date --date="$STAMP_DATE" '+%C%y%m%d%H%M')
+    SINCE=$(date --date="$TRY_DATE" '+%F %T' | sed -e 's@ @+@' -e 's@:@%3A@g')
+    BEFORE=$(date --date="$STAMP_DATE" '+%F %T' | sed -e 's@ @+@' -e 's@:@%3A@g')
 
-    GET_URL="http://${INSTANCE}/api/series/?project=${PROJECT}&since=${SINCE}"
-
+    GET_URL="http://${INSTANCE}/api/events/?category=series-completed&since=${SINCE}&before=${BEFORE}"
     response=$(curl -s "$userpw" "$GET_URL")
 
-    series_info=$(echo "$response" | jq -rc '.[] | (.id|tostring) + ";" + .url + ";" + .submitter.name + ";" + .submitter.email + ";" + (.received_all|tostring)')
+    series_info=$(echo "$response" | jq -rc ".[] | select(.project.link_name == \"${PROJECT}\") | (.payload.series.id|tostring) + \";\" + .payload.series.url + \";\"")
 
     if [ "X$series_info" != "X" ]; then
-        echo "$series_info" | while IFS=\; read -r id url submitter_name submitter_email all; do
+        echo "$series_info" | while IFS=\; read -r id url; do
+            all=1
+            series_author=$(curl -s "$userpw" "$url")
+            submitter_name=$(echo "$series_author" | jq '.submitter.name')
+            submitter_email=$(echo "$series_author" | jq '.submitter.email')
             emit_series "${INSTANCE}" "${PROJECT}" "$id" "$url" "$submitter_name" "$submitter_email" "$all"
         done
     fi
