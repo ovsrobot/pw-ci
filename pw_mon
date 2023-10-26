@@ -21,14 +21,60 @@
 
 [ -f "${HOME}/.pwmon-rc" ] && source "${HOME}/.pwmon-rc"
 
-if [ "$1" != "" ]; then
-    pw_project="$1"
-    shift
+if [ "$1" != ""  ]; then
+    if ! echo "$1" | grep -q -s -E ^-- ; then
+        pw_project="$1"
+        shift
+    fi
 fi
 
 if [ "$1" != "" ]; then
-    pw_instance="$1"
-    shift
+    if ! echo "$1" | grep -q -s -E ^-- ; then
+        pw_instance="$1"
+        shift
+    fi
+fi
+
+userpw=""
+
+if [ "$1" != "" ]; then
+    if ! echo "$1" | grep -q -s -E ^-- ; then
+        pw_credential="$1"
+        shift
+    fi
+fi
+
+
+while [ "$1" != "" ]; do
+    if echo "$1" | grep -q -s -E ^--pw-project= ; then
+        pw_project=$(echo "$1" | sed s/^--pw-project=//)
+        shift
+    elif echo "$1" | grep -q -s -E ^--pw-instance= ; then
+        pw_instance=$(echo "$1" | sed s/^--pw-instance=//)
+        shift
+    elif echo "$1" | grep -q -s -E ^--pw-credentials= ; then
+        pw_credential=$(echo "$1" | sed s/^--pw-credentials=//)
+        shift
+    elif echo "$1" | grep -E ^--help >/dev/null 2>&1; then
+        echo "patchwork monitor script"
+        echo "$0: args"
+        echo "Required if not set in ~/.pwmon-rc file:"
+        echo "  proj|--pw-project=<proj>		Project name"
+        echo "  instance|--pw-instance=<inst url>	URL for pw"
+        echo ""
+        echo "Options:"
+        echo "    --pw-credentials=u:p		Sets user / password for web client"
+        echo ""
+        exit 0
+    else
+        echo "Unknown option: '$1'"
+        echo "Rerun with --help for details"
+        exit 1
+    fi
+done
+
+if [ "X$pw_credential" != "X" ]; then
+   userpw="-u \"${pw_credential}\""
 fi
 
 if [ "X$pw_instance" == "X" -o "X$pw_project" == "X" ]; then
@@ -37,16 +83,6 @@ if [ "X$pw_instance" == "X" -o "X$pw_project" == "X" ]; then
    echo "(or pass it as an argument)."
    echo "Also either setup pw_instance or pass it as an argument."
    exit 1
-fi
-
-userpw=""
-
-if [ "$1" != "" ]; then
-    pw_credential="$1"
-fi
-
-if [ "X$pw_credential" != "X" ]; then
-   userpw="-u \"${pw_credential}\""
 fi
 
 source $(dirname $0)/series_db_lib.sh
