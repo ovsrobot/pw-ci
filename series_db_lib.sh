@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-Identifier: gpl-2.0-or-later
-# Copyright (C) 2018,2019 Red Hat, Inc.
+# Copyright (C) 2018-2023 Red Hat, Inc.
 #
 # Licensed under the terms of the GNU General Public License as published
 # by the Free Software Foundation; either version 2 of the License, or
@@ -114,6 +114,22 @@ EOF
         run_db_command "INSERT INTO series_schema_version(id) values (7);"
     fi
 
+    run_db_command "select * from series_schema_version;" | egrep '^8$' > /dev/null 2>&1
+    if [ $? -eq 1 ]; then
+        sqlite3 ${HOME}/.series-db <<EOF
+CREATE TABLE recheck_requests (
+recheck_id INTEGER,
+recheck_message_id STRING,
+recheck_requested_by STRING,
+recheck_series STRING,
+recheck_patch INTEGER,
+patchwork_instance STRING,
+patchwork_project STRING,
+recheck_sync INTEGER
+);
+EOF
+        run_db_command "INSERT INTO series_schema_version(id) values (8);"
+    fi
 }
 
 function series_db_exists() {
@@ -389,4 +405,58 @@ function get_patch_id_by_series_id_and_sha() {
     series_db_exists
 
     echo "select patch_id from git_builds where patchwork_instance=\"$instance\" and series_id=$series_id and sha=\"$sha\";" | series_db_execute
+}
+
+function get_sha_for_series_id_and_patch() {
+    local series_id="$1"
+    local patch_id="$2"
+    local instance="$3"
+
+    echo "select sha from git_builds where patchwork_instance=\"$instance\" and series_id=\"$series_id\" and patch_id=\"$patch_id\"" | series_db_execute
+}
+
+function get_recheck_requests_by_project() {
+    local recheck_instance="$1"
+    local recheck_project="$2"
+    local recheck_state="$3"
+    local recheck_requested_by="$4"
+
+    series_db_exists
+
+    echo "select recheck_message_id,recheck_series,recheck_patch from recheck_requests where patchwork_instance=\"$recheck_instance\" and patchwork_project=\"$recheck_project\" and recheck_sync=$recheck_state and recheck_requested_by=\"$recheck_requested_by\";" | series_db_execute
+}
+
+function insert_recheck_request_if_needed() {
+    local recheck_instance="$1"
+    local recheck_project="$2"
+    local recheck_msgid="$3"
+    local recheck_requested_by="$4"
+    local recheck_series="$5"
+    local recheck_patch="$6"
+
+    if ! echo "select * from recheck_requests where recheck_message_id=\"$recheck_msgid\";" | series_db_execute | grep $recheck_msgid >/dev/null 2>&1; then
+        echo "INSERT INTO recheck_requests (recheck_message_id, recheck_requested_by, recheck_series, recheck_patch, patchwork_instance, patchwork_project, recheck_sync) values (\"$recheck_msgid\", \"$recheck_requested_by\", \"$recheck_series\", $recheck_patch, \"$recheck_instance\", \"$recheck_project\", 0);" | series_db_execute
+    fi
+}
+
+function get_recheck_request() {
+    local recheck_instance="$1"
+    local recheck_project="$2"
+    local recheck_msgid="$3"
+    local recheck_requested_by="$4"
+    local recheck_series="$5"
+    local recheck_state="$6"
+
+    echo "select * from recheck_requests where patchwork_instance=\"$recheck_instance\" and patchwork_project=\"$recheck_project\" and recheck_requested_by=\"$recheck_requested_by\" and recheck_series=\"$recheck_series\" and recheck_message_id=\"$recheck_msgid\" and recheck_sync=$recheck_state;" | series_db_execute
+}
+
+function set_recheck_request_state() {
+    local recheck_instance="$1"
+    local recheck_project="$2"
+    local recheck_msgid="$3"
+    local recheck_requested_by="$4"
+    local recheck_series="$5"
+    local recheck_state="$6"
+
+    echo "UPDATE recheck_requests set recheck_sync=$recheck_state where patchwork_instance=\"$recheck_instance\" and patchwork_project=\"$recheck_project\" and recheck_requested_by=\"$recheck_requested_by\" and recheck_series=\"$recheck_series\";" | series_db_execute
 }

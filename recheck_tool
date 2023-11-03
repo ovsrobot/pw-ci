@@ -1,0 +1,99 @@
+#!/bin/sh
+# SPDX-Identifier: gpl-2.0-or-later
+# Copyright (C) 2023 Red Hat, Inc.
+#
+# Licensed under the terms of the GNU General Public License as published
+# by the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.  You may obtain a copy of the
+# license at
+#
+#    https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+mode="select"
+
+while [ "$1" != "" ]; do
+    if echo "$1" | grep -q -s -E ^--help ; then
+        echo "recheck / retest state machine script"
+        echo ""
+        echo "$0:"
+        echo " --pw-project=<proj>:	Patchwork project."
+        echo " --pw-instance=<inst>:	Patchwork instance."
+        echo " --filter=<str>:		Job / request for recheck."
+        echo " --state=<0..>:		Resync state ID."
+        echo " --msgid=<msgid>:		Message ID to select."
+        echo " --update:		Set tool in update mode"
+        echo " --new-state=<0..>:	New state ID to set"
+        echo " --series-id=<..>:	Series ID"
+        echo ""
+        echo "Will spit out a parsable json for each db line when selecting"
+        exit 0
+    elif echo "$1" | grep -q -s -E ^--pw-project= ; then
+        pw_project=$(echo "$1" | sed s/^--pw-project=//)
+    elif echo "$1" | grep -q -s -E ^--pw-instance= ; then
+        pw_instance=$(echo "$1" | sed s/^--pw-instance=//)
+    elif echo "$1" | grep -q -s -E ^--filter= ; then
+        filter=$(echo "$1" | sed s/^--filter=//)
+    elif echo "$1" | grep -q -s -E ^--state= ; then
+        recheck_state=$(echo "$1" | sed s/^--state=//)
+    elif echo "$1" | grep -q -s -E ^--msgid= ; then
+        message_id=$(echo "$1" | sed s/^--msgid=//)
+    elif echo "$1" | grep -q -s -E ^--update ; then
+        mode="update"
+    elif echo "$1" | grep -q -s -E ^--new-state= ; then
+        new_recheck_state=$(echo "$1" | sed s/^--new-state=//)
+    elif echo "$1" | grep -q -s -E ^--series-id= ; then
+        series_id=$(echo "$1" | sed s/^--series-id=//)
+    else
+        echo "Unknown option: '$1'"
+        echo "Rerun with --help for details"
+        exit 1
+    fi
+    shift
+done
+
+source $(dirname $0)/series_db_lib.sh
+
+if [ "$mode" == "select" ]; then
+    echo -n "{\"rechecks\":["
+    printed=""
+    for request in $(get_recheck_requests_by_project "$pw_instance" \
+                                                     "$pw_project" \
+                                                     "$recheck_state" \
+                                                     "$filter"); do
+        message_id=$(echo $request | cut -d\| -f1)
+        series_id=$(echo $request | cut -d\| -f2)
+        patch_id=$(echo $request | cut -d\| -f3)
+
+        sha=$(get_sha_for_series_id_and_patch "$series_id" "$patch_id" \
+                                              "$pw_instance")
+        echo -n "$printed{\"pw_instance\":\"$pw_instance\",\"series_id\":$series_id,\"patch_id\":$patch_id,\"sha\":\"$sha\",\"msg_id\":\"$message_id\",\"state\":\"$recheck_state\",\"requested\":\"$filter\"}"
+        printed=","
+    done
+    echo "]}"
+elif [ "$mode" == "update" ]; then
+    if [ "X$new_recheck_state" == "X" -o "X$series_id" == "X" ]; then
+        echo "Need to set a series-id and a new recheck state when updating."
+        exit 1
+    fi
+
+    request=$(get_recheck_request "$pw_instance" "$pw_project" "$message_id" \
+                                  "$filter" "$series_id" "$recheck_state")
+    if [ "X$request" == "X" ]; then
+        echo "{\"result\":\"notfound\"}"
+        exit 0
+    fi
+
+    set_recheck_request_state "$pw_instance" "$pw_project" "$message_id" \
+                              "$filter" "$series_id" "$new_recheck_state"
+
+    echo "{\"result\":\"executed\",\"recheck\":{\"pw_instance\": \"$pw_instance\", \"series_id\":$series_id, \"msg_id\":\"$message_id\", \"state\":\"$new_recheck_state\", \"requested\": \"$filter\"}}"
+else
+    echo "Uknown state: $mode"
+    exit 1
+fi

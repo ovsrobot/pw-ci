@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-Identifier: gpl-2.0-or-later
-# Copyright (C) 2018, Red Hat, Inc.
+# Copyright (C) 2018-2023 Red Hat, Inc.
 #
 # Monitors a project on a patchwork instance for new series submissions
 # Records the submissions in the series database (and emits them on the
@@ -44,6 +44,7 @@ if [ "$1" != "" ]; then
     fi
 fi
 
+recheck_filter=""
 
 while [ "$1" != "" ]; do
     if echo "$1" | grep -q -s -E ^--pw-project= ; then
@@ -64,8 +65,13 @@ while [ "$1" != "" ]; do
         echo ""
         echo "Options:"
         echo "    --pw-credentials=u:p		Sets user / password for web client"
+        echo "    --add-filter-recheck=filter  Adds a filter to flag that a recheck needs to be done"
         echo ""
         exit 0
+    elif echo "$1" | grep -q -s -E ^--add-filter-recheck=; then
+        filter_str=$(echo "$1" | sed s/--add-filter-recheck=//)
+        recheck_filter="$filter_str $recheck_filter"
+        shift
     else
         echo "Unknown option: '$1'"
         echo "Rerun with --help for details"
@@ -190,7 +196,58 @@ function check_superseded_series() {
     done
 }
 
+function run_recheck() {
+    local recheck_list=$(echo "$7" | sed -e 's/^Recheck-request: // ' -e 's/,/ /g')
+
+    for filter in $recheck_filter; do
+        for check in $recheck_list; do
+            if [ "$filter" == "$check" ]; then
+                insert_recheck_request_if_needed "$1" "$3" "$8" "$check" "$2" "$9"
+            fi
+        done
+    done
+}
+
+function check_patch_for_retest_request() {
+    local patch_url="$1"
+
+    local patch_json=$(curl -s "$userpw" "$patch_url")
+    local patch_comments_url=$(echo "$patch_json" | jq -rc '.comments')
+    local patch_id=$(echo "$patch_json" | jq -rc '.id')
+    if [ "Xnull" != "X$patch_comments_url" ]; then
+        local comments_json=$(curl -s "$userpw" "$patch_comments_url")
+
+        local seq_end=$(echo "$comments_json" | jq -rc 'length')
+        if [ "$seq_end" -a $seq_end -gt 0 ]; then
+            seq_end=$((seq_end-1))
+            for comment_id in $(seq 0 $seq_end); do
+                local recheck_requested=$(echo "$comments_json" | jq -rc ".[$comment_id].content" | grep "^Recheck-request: ")
+                if [ "X$recheck_requested" != "X" ]; then
+                    local msgid=$(echo "$comments_json" | jq -rc ".[$comment_id].msgid")
+                    run_recheck "$pw_instance" "$series_id" "$project" "$url" "$repo" "$branchname" "$recheck_requested" "$msgid" "$patch_id"
+                fi
+            done
+        fi
+    fi
+}
+
+function check_series_needs_retest() {
+    local pw_instance="$1"
+
+    series_get_active_branches "$pw_instance" | while IFS=\| read -r series_id project url repo branchname; do
+        local patch_comments_url=$(curl -s "$userpw" "$url" | jq -rc '.patches[] | .url')
+
+        for patch in $patch_comments_url; do
+            check_patch_for_retest_request $patch
+        done
+    done
+}
+
 check_undownloaded_series "$pw_instance" "$pw_project"
 check_completed_series "$pw_instance" "$pw_project"
 check_new_series "$pw_instance" "$pw_project"
 check_superseded_series "$pw_instance"
+
+# check for retest requests after a series is still passing all the
+# checks above
+check_series_needs_retest "$pw_instance"
