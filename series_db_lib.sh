@@ -382,6 +382,14 @@ function set_synced_for_series() {
     echo "update git_builds set gap_sync=1, obs_sync=1 where patchwork_instance=\"$instance\" and series_id=$series_id;" | series_db_execute
 }
 
+function set_unsynced_for_series() {
+    local series_id="$1"
+    local instance="$2"
+    local ci_instance="$3"
+
+    echo "update git_builds set $ci_instance=0 where patchwork_instance=\"$instance\" and series_id=$series_id;" | series_db_execute
+}
+
 function insert_commit() {
     local series_id="$1"
     local patch_id="$2"

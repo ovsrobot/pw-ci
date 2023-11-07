@@ -1,0 +1,145 @@
+#!/bin/bash
+# SPDX-Identifier: gpl-2.0-or-later
+# Copyright (C) 2023, Red Hat, Inc.
+#
+# Restarts a github job run.  This can be used in conjunction with
+# the recheck requests to provide the ability for a user to restart
+# a test - in case the workflow is suspected of having a spurious run.
+#
+# Licensed under the terms of the GNU General Public License as published
+# by the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.  You may obtain a copy of the
+# license at
+#
+#    https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+wait_start="no"
+
+while [ "$1" != "" ]; do
+    if echo "$1" | grep -q -s -E ^--pw-project= ; then
+        pw_project=$(echo "$1" | sed s/^--pw-project=//)
+        shift
+    elif echo "$1" | grep -q -s -E ^--pw-instance= ; then
+        pw_instance=$(echo "$1" | sed s/^--pw-instance=//)
+        shift
+    elif echo "$1" | grep -q -s -E ^--pw-credentials= ; then
+        pw_credential=$(echo "$1" | sed s/^--pw-credentials=//)
+        shift
+    elif echo "$1" | grep -q -s -E ^--series-id= ; then
+        series_id=$(echo "$1" | sed s/^--series-id=//)
+        shift
+    elif echo "$1" | grep -q -s -E ^--wait-start ; then
+        wait_start="yes"
+        if echo "$1" | grep -q -s -E ^--wait-start= ; then
+            wait_start=$(echo "$1" | sed s/^--wait-start=//)
+        fi
+        shift
+    elif echo "$1" | grep -q -s -E ^--github-token= ; then
+        github_token=$(echo "$1" | sed s/^--github-token=//)
+        shift
+    elif echo "$1" | grep -q -s -E ^--repository= ; then
+        reponame=$(echo "$1" | sed s/^--repository=//)
+        shift
+    elif echo "$1" | grep -q -s -E ^--run-id= ; then
+        runid=$(echo "$1" | sed s/^--repository=//)
+        shift
+    elif echo "$1" | grep -q -s -E ^--sha= ; then
+        sha=$(echo "$1" | sed s/^--sha=//)
+        shift
+    elif echo "$1" | grep -q -s -E ^--workflow= ; then
+        workflow=$(echo "$1" | sed s/^--workflow=//)
+        shift
+    elif echo "$1" | grep -q -s -E ^--help ; then
+        echo "github restarting script"
+        echo "$0: args"
+        echo "  --pw-project=<proj>		Project name"
+        echo "  --pw-instance=<inst url>	URL for pw"
+        echo "  --series-id=id		Series ID for reference"
+        echo "  --github-token=token		Token for github"
+        echo "  --wait-start[=yes|no]		Wait for the remote to start"
+        echo "  --repository=repo		Repository name (ex foo/bar)"
+        echo "  --run-id=id			run ID"
+        echo "  --workflow=workflow		Workflow name"
+        echo "  --sha=commit			Commit sha"
+        echo ""
+        exit 0
+    else
+        echo "Unknown option: '$1'" >&2
+        echo "Rerun with --help for details" >&2
+        exit 1
+    fi
+done
+
+source $(dirname $0)/series_db_lib.sh
+
+if [ "X$wait_start" != "Xno" -a "X$wait_start" != "Xyes" ]; then
+    echo "Unrecognized '$wait_start' argument to --wait-start=" >&2
+    echo "valid values are 'yes' or 'no'." >&2
+    exit 1
+fi
+
+if [ "X$github_token" == "X" ]; then
+    echo "Please set a github API token." >&2
+    echo "Use --help for more info." >&2
+    exit 1
+fi
+
+if [ "X$reponame" == "X" ]; then
+    echo "Please set a repository (ie: '--repository=owner/repo')." >&2
+    echo "Use --help for more info." >&2
+    exit 1
+fi
+
+AUTH="Authorization: token ${github_token}"
+APP="Accept: application/vnd.github.v3+json"
+
+if [ "X$runid" == "X" ]; then
+
+    # lookup the runs based on the shasum
+
+    if [ "X$sha" == "X" ]; then
+        echo "Need a runid or shasum to key off." >&2
+        echo "See --help for more details." >&2
+        exit 1
+    fi
+
+    if [ "X$workflow" != "X" ]; then
+        workflow_select=" | select(.name == \"${workflow}\")"
+    fi
+
+    comma=""
+    for job in $(curl -s -S -H "${AUTH}" -H "${APP}" \
+                      "https://api.github.com/repos/${reponame}/actions/runs?head_sha=${sha}" | \
+                     jq -rc ".workflow_runs[] ${workflow_select} .id")
+    do
+        runid="${comma}${job}"
+        comma=","
+    done
+fi
+
+echo -n "{\"results\":["
+comma=""
+for job in $(echo "$runid" | sed 's/,/ /'); do
+    result=$(curl -s -X POST -L -S -H "${AUTH}" -H "${APP}" \
+                  "https://api.github.com/repos/${reponame}/actions/runs/$job/rerun")
+    msg=$(echo "$result" | jq -rc '.message')
+
+    echo -n "$comma{\"run\":$job,\"result\":"
+    if [ "X$msg" == "Xnull" ]; then
+        echo -n "\"sent\""
+        if [ "X$series_id" != "X" ]; then
+            echo -n ",\"gap_sync\":\"reset\""
+            set_unsynced_for_series "$series_id" "$pw_instance" "gap_sync"
+        fi
+    else
+        echo -n "\"err\",\"error\":\"$msg\""
+    fi
+    echo -n "}"
+done
+echo "]}"
