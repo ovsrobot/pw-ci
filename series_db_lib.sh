@@ -442,7 +442,7 @@ function insert_recheck_request_if_needed() {
     local recheck_series="$5"
     local recheck_patch="$6"
 
-    if ! echo "select * from recheck_requests where recheck_message_id=\"$recheck_msgid\";" | series_db_execute | grep $recheck_msgid >/dev/null 2>&1; then
+    if ! echo "select * from recheck_requests where recheck_message_id=\"$recheck_msgid\" and recheck_requested_by=\"$recheck_requested_by\";" | series_db_execute | grep $recheck_msgid >/dev/null 2>&1; then
         echo "INSERT INTO recheck_requests (recheck_message_id, recheck_requested_by, recheck_series, recheck_patch, patchwork_instance, patchwork_project, recheck_sync) values (\"$recheck_msgid\", \"$recheck_requested_by\", \"$recheck_series\", $recheck_patch, \"$recheck_instance\", \"$recheck_project\", 0);" | series_db_execute
     fi
 }

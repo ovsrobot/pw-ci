@@ -202,6 +202,7 @@ function run_recheck() {
     for filter in $recheck_filter; do
         for check in $recheck_list; do
             if [ "$filter" == "$check" ]; then
+                echo "Recheck matched: $1 $3 $8 $check $2 $9"
                 insert_recheck_request_if_needed "$1" "$3" "$8" "$check" "$2" "$9"
             fi
         done
@@ -209,14 +210,28 @@ function run_recheck() {
 }
 
 function check_patch_for_retest_request() {
-    local patch_url="$1"
+    local pw_instance="$1"
+    local pw_project="$2"
+    local patch_url="$3"
 
     local patch_json=$(curl -s "$userpw" "$patch_url")
     local patch_comments_url=$(echo "$patch_json" | jq -rc '.comments')
     local patch_id=$(echo "$patch_json" | jq -rc '.id')
+    local series_id=$(echo "$patch_json" | jq -rc '.series[].id')
+
+    # check the patch to see if it has a good state
+    # This is needed because there is a disconnect in some instances between
+    # Patchwork's "series" state and "patch" state
+
+    local patch_state=$(echo "$patch_json" | jq -rc '.state')
+
+    if [ "$patch_state" = "superseded" -o "$patch_state" = "rejected" -o "$patch_state" = "accepted" \
+                        -o "$patch_state" = "changes-requested" -o "$patch_state" = "not-applicable" ]; then
+        return
+    fi
+
     if [ "Xnull" != "X$patch_comments_url" ]; then
         local comments_json=$(curl -s "$userpw" "$patch_comments_url")
-
         local seq_end=$(echo "$comments_json" | jq -rc 'length')
         if [ "$seq_end" -a $seq_end -gt 0 ]; then
             seq_end=$((seq_end-1))
@@ -224,7 +239,7 @@ function check_patch_for_retest_request() {
                 local recheck_requested=$(echo "$comments_json" | jq -rc ".[$comment_id].content" | grep "^Recheck-request: ")
                 if [ "X$recheck_requested" != "X" ]; then
                     local msgid=$(echo "$comments_json" | jq -rc ".[$comment_id].msgid")
-                    run_recheck "$pw_instance" "$series_id" "$project" "$url" "$repo" "$branchname" "$recheck_requested" "$msgid" "$patch_id"
+                    run_recheck "$pw_instance" "$series_id" "$pw_project" "$url" "$repo" "$branchname" "$recheck_requested" "$msgid" "$patch_id"
                 fi
             done
         fi
@@ -233,13 +248,32 @@ function check_patch_for_retest_request() {
 
 function check_series_needs_retest() {
     local pw_instance="$1"
+    local pw_project="$2"
 
-    series_get_active_branches "$pw_instance" | while IFS=\| read -r series_id project url repo branchname; do
-        local patch_comments_url=$(curl -s "$userpw" "$url" | jq -rc '.patches[] | .url')
+    local series_list=$(curl -s "$userpw" "http://${pw_instance}/api/series/?project=${pw_project}&state=new&state=rfc&state=under-review&archived=false&order=-id")
+    local n=$(echo "$series_list" | jq -rc 'length')
 
-        for patch in $patch_comments_url; do
-            check_patch_for_retest_request $patch
-        done
+    if [ "Xnull" == "X$n" -o "X" == "X$n" ]; then
+        return
+    fi
+
+    series_end=$(($n-1))
+    [ "$series_end" -le 0 ] && return
+    for series_n in $(seq 0 $series_end); do
+        local patches_list=$(echo "$series_list" | jq -rc ".[$series_n].patches")
+        o=$(echo "$patches_list" | jq -rc 'length')
+        if [ "Xnull" == "X$o" -o "X" == "X$o" -o "X0" == "X$o" ]; then
+            echo "WARN: Missing patches when checking series."
+        else
+            patch_end=$(($o-1))
+            for patch_n in $(seq 0 $patch_end); do
+                local patch_url=$(echo "$patches_list" | jq -rc ".[$patch_n].url")
+
+                if [ "Xnull" != "X$patch_url" ]; then
+                    check_patch_for_retest_request "$pw_instance" "$pw_project" "$patch_url"
+                fi
+            done
+        fi
     done
 }
 
@@ -250,4 +284,6 @@ check_superseded_series "$pw_instance"
 
 # check for retest requests after a series is still passing all the
 # checks above
-check_series_needs_retest "$pw_instance"
+if [ "X$recheck_filter" != "X" ]; then
+    check_series_needs_retest "$pw_instance" "$pw_project"
+fi
