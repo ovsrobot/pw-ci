@@ -130,6 +130,17 @@ recheck_sync INTEGER
 EOF
         run_db_command "INSERT INTO series_schema_version(id) values (8);"
     fi
+
+    run_db_command "select * from series_schema_version;" | egrep '^9$' > /dev/null 2>&1
+    if [ $? -eq 1 ]; then
+        sqlite3 ${HOME}/.series-db <<EOF
+CREATE TABLE check_id_scanned (
+check_patch_id INTEGER,
+check_url STRING
+)
+EOF
+        run_db_command "INSERT INTO series_schema_version(id) values (9);"
+    fi
 }
 
 function series_db_exists() {
@@ -467,4 +478,18 @@ function set_recheck_request_state() {
     local recheck_state="$6"
 
     echo "UPDATE recheck_requests set recheck_sync=$recheck_state where patchwork_instance=\"$recheck_instance\" and patchwork_project=\"$recheck_project\" and recheck_requested_by=\"$recheck_requested_by\" and recheck_series=\"$recheck_series\";" | series_db_execute
+}
+
+function add_check_scanned_url() {
+    local patch_id="$1"
+    local url="$2"
+
+    echo "INSERT into check_id_scanned (check_patch_id, check_url) values (${patch_id}, \"$url\");" | series_db_execute
+}
+
+function check_id_exists() {
+    local patch_id="$1"
+    local url="$2"
+
+    echo "select * from check_id_scanned where check_patch_id=$patch_id and check_url=\"$url\";" | series_db_execute | grep "$url" >/dev/null 2>&1
 }

@@ -20,6 +20,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+[ -f "$(dirname $0)/series_db_lib.sh" ] && source "$(dirname $0)/series_db_lib.sh" || exit 1
 [ -f "${HOME}/.mail_patchwork_sync.rc" ] && source "${HOME}/.mail_patchwork_sync.rc"
 
 # Patchwork instance to update with new reports from mailing list
@@ -75,6 +76,13 @@ send_post() {
     if [ -z "$context" -o -z "$state" -o -z "$description" -o -z "$patch_id" ]; then
         echo "Skpping \"$link\" due to missing context, state, description," \
              "or patch_id" 1>&2
+        # Just don't want to even bother seeing these "bad" patches as well.
+        add_check_scanned_url "$patch_id" "$target_url"
+        return 0
+    fi
+
+    if check_id_exists "$patch_id" "$target_url" ; then
+        echo "Skipping \"$link\" - already reported." 1>&2
         return 0
     fi
 
@@ -84,6 +92,7 @@ send_post() {
         "$api_url")"
     if [ $? -ne 0 ]; then
         echo "Failed to get proper server response on link ${api_url}" 1>&2
+        # Don't store these as processed in case the server has a temporary issue.
         return 0
     fi
 
@@ -95,6 +104,9 @@ send_post() {
     jq -e "[.[].target_url] | contains([\"$mail_url\"])" >/dev/null
     then
         echo "Report ${target_url} already pushed to patchwork. Skipping." 1>&2
+        # Somehow this was not stored (for example, first time we apply the tracking
+        # feature).  Store it now.
+        add_check_scanned_url "$patch_id" "$target_url"
         return 0
     fi
 
@@ -114,12 +126,31 @@ send_post() {
     if [ $? -ne 0 ]; then
         echo -e "Failed to push retults based on report ${link} to the"\
                 "patchwork instance ${pw_instance} using the following REST"\
-                "API Endpoint ${api_url} with the following data:\n$data\n"
+                "API Endpoint ${api_url} with the following data:\n$data\n" 1>&2
         return 0
     fi
+
+    add_check_scanned_url "$patch_id" "$target_url"
 }
 
+# Collect the date.  NOTE: this needs some accomodate to catch the month change-overs
 year_month="$(date +"%Y-%B")"
+
+# Get the last modified time
+report_last_mod=$(curl --head -A "(pw-ci) pw-post" -sSf "${mail_archive}${year_month}/thread.html" | grep -i Last-Modified)
+
+mailing_list_save_file=$(echo ".post_pw_${mail_archive}${year_month}" | sed -e "s@/@_@g" -e "s@:@_@g" -e "s,@,_,g")
+
+if [ -e "${HOME}/${mailing_list_save_file}" ]; then
+    last_read_date=$(cat "${HOME}/${mailing_list_save_file}")
+    if [ "$last_read_date" -a "$last_read_date" == "$report_last_mod" ]; then
+        echo "Last modified times match.  Skipping list parsing."
+        exit 0
+    fi
+fi
+
+last_read_date="$report_last_mod"
+
 reports="$(curl -A "(pw-ci) pw-post" -sSf "${mail_archive}${year_month}/thread.html" | \
          grep -i 'HREF=' | sed -e 's@[0-9]*<LI><A HREF="@\|@' -e 's@">@\|@')"
 if [ $? -ne 0 ]; then
@@ -132,3 +163,5 @@ echo "$reports" | while IFS='|' read -r blank link title; do
         send_post "${mail_archive}${year_month}/$link"
     fi
 done
+
+echo "$last_read_date" > "${HOME}/${mailing_list_save_file}"
