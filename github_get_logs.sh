@@ -74,14 +74,14 @@ print_errored_logs_for_commit () {
     run_id="$(echo "$run_meta" | jq -r ".id")"
 
      # Get the real logs url, download logs, and unzip logs
-    logs_url="$(curl -s -S -H "${AUTH}" -H "${APP}" "${redirect_url}" -I | \
+    logs_url="$(curl -A "(pw-ci) github-logs-crawler" -s -S -H "${AUTH}" -H "${APP}" "${redirect_url}" -I | \
         grep -i 'Location: '| sed 's/Location: //i' | tr -d '\r')"
-    curl -s -S "$logs_url" -o "build_logs_series_${series_id}.zip"
+    curl -A "(pw-ci) github-logs-crawler" -s -S "$logs_url" -o "build_logs_series_${series_id}.zip"
     unzip -o -q "build_logs_series_${series_id}.zip" -d "build_logs_series_${series_id}"
 
     # Get the names of the failed jobs and the steps that failed
     tmp_url="$GITHUB_API/repos/$repo_name/actions/runs/${run_id}/jobs"
-    jobs_results="$(curl -s -S -H "${AUTH}" -H "${APP}" "${tmp_url}")"
+    jobs_results="$(curl -A "(pw-ci) github-logs-crawler" -s -S -H "${AUTH}" -H "${APP}" "${tmp_url}")"
     jobs_results="$(echo "$jobs_results" | jq "[.jobs[] | \
         select(.conclusion==\"failure\") | {name, failed_step: .steps[] | \
         select(.conclusion==\"failure\") | {name, conclusion, number}}]")"
@@ -135,7 +135,7 @@ repo_name=$(echo "$repo_name" | sed -e 's@%2F@/@g' -e 's,%40,@,g')
 
 # Get GHA runs
 tmp_url="$GITHUB_API/repos/$repo_name/actions/runs?per_page=9000"
-all_runs="$(curl -s -S -H "${AUTH}" -H "${APP}" "${tmp_url}")"
+all_runs="$(curl -A "(pw-ci) github-logs-crawler" -s -S -H "${AUTH}" -H "${APP}" "${tmp_url}")"
 runs=$(echo $all_runs | jq -rc ".workflow_runs[] | select(.head_branch == \"series_$series_id\")")
 not_found="$(echo "$runs" | jq -rc ".message")"
 if [ "$not_found" == "Not Found" ]; then

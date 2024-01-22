@@ -146,7 +146,7 @@ function check_new_series() {
 
     GET_URL="http://${INSTANCE}/api/series/?project=${PROJECT}&since=${SINCE}"
 
-    response=$(curl -s "$userpw" "$GET_URL")
+    response=$(curl -A "(pw-ci) pw-mon-${PROJECT}" -s "$userpw" "$GET_URL")
 
     series_info=$(echo "$response" | jq -rc '.[] | (.id|tostring) + ";" + .url + ";" + .submitter.name + ";" + .submitter.email + ";" + (.received_all|tostring)')
 
@@ -162,7 +162,7 @@ function check_new_series() {
 function check_completed_series() {
     get_uncompleted_jobs_as_line "$pw_instance" "$pw_project" | while IFS=\| read -r id url submitter_name submitter_email; do
         echo "Checking on series: $id"
-        local RESPONSE=$(curl -s "$userpw" "$url" | jq -rc '.received_all')
+        local RESPONSE=$(curl -A "(pw-ci) pw-mon-${PROJECT}" -s "$userpw" "$url" | jq -rc '.received_all')
         if [ "$RESPONSE" = "true" ]; then
             echo "Setting series $id to completed"
             series_id_set_complete "$pw_instance" "$id"
@@ -183,8 +183,8 @@ function check_superseded_series() {
     local pw_instance="$1"
     series_get_active_branches "$pw_instance" | while IFS=\| read -r series_id project url repo branchname; do
         # first query the patch states
-        local last_patch_url=$(curl -s "$userpw" "$url" | jq -rc '.patches[-1].url')
-        local patch_state=$(curl -s "$userpw" "$last_patch_url" | jq -rc '.state')
+        local last_patch_url=$(curl -A "(pw-ci) pw-mon-${PROJECT}" -s "$userpw" "$url" | jq -rc '.patches[-1].url')
+        local patch_state=$(curl -A "(pw-ci) pw-mon-${PROJECT}" -s "$userpw" "$last_patch_url" | jq -rc '.state')
 
         # now check to see if the patch should even be reported...
         if [ "$patch_state" = "superseded" -o "$patch_state" = "rejected" -o "$patch_state" = "accepted" \
@@ -214,7 +214,7 @@ function check_patch_for_retest_request() {
     local pw_project="$2"
     local patch_url="$3"
 
-    local patch_json=$(curl -s "$userpw" "$patch_url")
+    local patch_json=$(curl -A "(pw-ci) pw-mon-${PROJECT}" -s "$userpw" "$patch_url")
     local patch_comments_url=$(echo "$patch_json" | jq -rc '.comments')
     local patch_id=$(echo "$patch_json" | jq -rc '.id')
     local series_id=$(echo "$patch_json" | jq -rc '.series[].id')
@@ -231,7 +231,7 @@ function check_patch_for_retest_request() {
     fi
 
     if [ "Xnull" != "X$patch_comments_url" ]; then
-        local comments_json=$(curl -s "$userpw" "$patch_comments_url")
+        local comments_json=$(curl -A "(pw-ci) pw-mon-${PROJECT}" -s "$userpw" "$patch_comments_url")
         local seq_end=$(echo "$comments_json" | jq -rc 'length')
         if [ "$seq_end" -a $seq_end -gt 0 ]; then
             seq_end=$((seq_end-1))
@@ -250,7 +250,7 @@ function check_series_needs_retest() {
     local pw_instance="$1"
     local pw_project="$2"
 
-    local series_list=$(curl -s "$userpw" "http://${pw_instance}/api/series/?project=${pw_project}&state=new&state=rfc&state=under-review&archived=false&order=-id")
+    local series_list=$(curl -A "(pw-ci) pw-mon-${PROJECT}" -s "$userpw" "http://${pw_instance}/api/series/?project=${pw_project}&state=new&state=rfc&state=under-review&archived=false&order=-id")
     local n=$(echo "$series_list" | jq -rc 'length')
 
     if [ "Xnull" == "X$n" -o "X" == "X$n" ]; then

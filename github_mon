@@ -117,7 +117,7 @@ while IFS="|" read -r series_id patch_id patch_url patch_name sha patchwork_inst
         tmp_url="$GITHUB_API/repos/$repo_name/actions/runs?per_page=9000"
         if [ "$tmp_url" != "$prev_url" ]; then
             prev_url="$tmp_url"
-            all_runs="$(curl -s -S -H "${AUTH}" -H "${APP}" "${tmp_url}")"
+            all_runs="$(curl -A "(pw-ci) github-mon-${pw_project}" -s -S -H "${AUTH}" -H "${APP}" "${tmp_url}")"
         fi
 
         runs=$(echo "$all_runs" | jq -rc ".workflow_runs[] | select(.head_branch == \"series_$series_id\")")

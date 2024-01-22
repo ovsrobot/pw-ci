@@ -159,7 +159,7 @@ for I in travis github obs dummy; do
         author=$(echo $SERIES_LINE | cut -d\| -f4)
         email=$(echo $SERIES_LINE | cut -d\| -f5)
 
-        PATCHDATA=$(curl -s $url)
+        PATCHDATA=$(curl -A "(pw-ci) ci-mon-${PROJECT}" -s $url)
 
         patch_id="$(get_patch_id_by_series_id_and_sha "$series_id" "$shasum" "$pw_chk_instance")"
         if [ "X$patch_id" == "X" ]; then

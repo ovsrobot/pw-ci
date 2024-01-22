@@ -114,7 +114,8 @@ if [ "X$runid" == "X" ]; then
     fi
 
     comma=""
-    for job in $(curl -s -S -H "${AUTH}" -H "${APP}" \
+    for job in $(curl -A "(pw-ci) github-restart-${pw_project}" -s -S -H "${AUTH}" \
+                      -H "${APP}" \
                       "https://api.github.com/repos/${reponame}/actions/runs?head_sha=${sha}" | \
                      jq -rc ".workflow_runs[] ${workflow_select} .id")
     do
@@ -126,7 +127,8 @@ fi
 echo -n "{\"results\":["
 comma=""
 for job in $(echo "$runid" | sed 's/,/ /'); do
-    result=$(curl -s -X POST -L -S -H "${AUTH}" -H "${APP}" \
+    result=$(curl -A "(pw-ci) github-restart-${pw_project}" -s -X POST -L -S \
+                  -H "${AUTH}" -H "${APP}" \
                   "https://api.github.com/repos/${reponame}/actions/runs/$job/rerun")
     msg=$(echo "$result" | jq -rc '.message')
 

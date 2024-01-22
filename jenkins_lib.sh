@@ -41,12 +41,12 @@ if [ "X$jenkins_token" != "X" ]; then
     jenkins_credentials="$jenkins_user:$jenkins_token"
 fi
 
-jenkins_crumb_value=$(curl -s "http://${jenkins_credentials}@${jenkins_url}/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)")
+jenkins_crumb_value=$(curl -A "(pw-ci) jenkins-sub-${PROJECT}" -s "http://${jenkins_credentials}@${jenkins_url}/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)")
 
 function jenkins_check_for_job() {
     local jenkins_job=jenkins_${pw_project}_job
 
-    curl -s -f -X GET \
+    curl -A "(pw-ci) jenkins-sub-${PROJECT}" -s -f -X GET \
          "http://${jenkins_credentials}@${jenkins_url}/job/${!jenkins_job}/config.xml" >/dev/null
 }
 
@@ -86,6 +86,7 @@ function jenkins_submit_series() {
         }'
 
     curl -s -f -X POST \
+         -A "(pw-ci) jenkins-sub-${PROJECT}" \
          -H "${jenkins_crumb_value}" \
          --data token="${!jenkins_job_token}" \
          --data-urlencode json="$json_data" \
