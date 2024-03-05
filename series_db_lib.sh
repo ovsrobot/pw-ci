@@ -141,6 +141,15 @@ check_url STRING
 EOF
         run_db_command "INSERT INTO series_schema_version(id) values (9);"
     fi
+
+    # 0010 - cirrus CI data
+    run_db_command "select * from series_schema_version;" | egrep '^10$' >/dev/null 2>&1
+    if [ $? -eq 1 ]; then
+        sqlite3 ${HOME}/.series-db <<EOF
+ALTER TABLE git_builds ADD COLUMN cirrus_sync INTEGER;
+EOF
+        run_db_command "INSERT INTO series_schema_version(id) values (10);"
+    fi
 }
 
 function series_db_exists() {
@@ -390,7 +399,7 @@ function set_synced_for_series() {
 
     series_db_exists
 
-    echo "update git_builds set gap_sync=1, obs_sync=1 where patchwork_instance=\"$instance\" and series_id=$series_id;" | series_db_execute
+    echo "update git_builds set gap_sync=1, obs_sync=1, cirrus_sync=1 where patchwork_instance=\"$instance\" and series_id=$series_id;" | series_db_execute
 }
 
 function set_unsynced_for_series() {
@@ -413,7 +422,7 @@ function insert_commit() {
 
     series_db_exists
 
-    echo "INSERT INTO git_builds (series_id, patch_id, patch_url, patch_name, sha, patchwork_instance, patchwork_project, repo_name, gap_sync, obs_sync) VALUES($series_id, $patch_id, \"$patch_url\", \"$patch_name\", \"$sha\", \"$instance\", \"$project\", \"$repo_name\", 0, 0);" | series_db_execute
+    echo "INSERT INTO git_builds (series_id, patch_id, patch_url, patch_name, sha, patchwork_instance, patchwork_project, repo_name, gap_sync, obs_sync, cirrus_sync) VALUES($series_id, $patch_id, \"$patch_url\", \"$patch_name\", \"$sha\", \"$instance\", \"$project\", \"$repo_name\", 0, 0, 0);" | series_db_execute
 }
 
 function get_patch_id_by_series_id_and_sha() {

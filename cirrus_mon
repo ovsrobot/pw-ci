@@ -1,0 +1,103 @@
+#!/bin/bash
+# SPDX-Identifier: gpl-2.0-or-later
+# Copyright (C) 2023, Red Hat, Inc.
+#
+# Monitors cirrus build history for builds in a series.
+# Records the builds in the series database (and emits them on the
+# stdout line for processing)
+#
+# Licensed under the terms of the GNU General Public License as published
+# by the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.  You may obtain a copy of the
+# license at
+#
+#    https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[ -f "$(dirname $0)/series_db_lib.sh" ] && source "$(dirname $0)/series_db_lib.sh"
+
+while [ "$1" != "" ]; do
+    if echo "$1" | grep -q -s -E ^--pw-instance= ; then
+        pw_instance=$(echo "$1" | sed s/^--pw-instance=//)
+        shift
+    elif echo "$1" | grep -q -s -E ^--cirrus-token= ; then
+        cirrus_token=$(echo "$1" | sed s/^--cirrus-token=//)
+        shift
+    elif echo "$1" | grep -q -s -E ^--help ; then
+        echo "Cirrus CI monitor script"
+        echo "$0: args"
+        echo "Required if not set in ~/.pwmon-rc file:"
+        echo "  --pw-instance=<inst url>        URL for pw"
+        echo ""
+        echo "Options:"
+        echo "  --cirrus-token=<token>          Sets token for web requests"
+        echo ""
+        echo "Script invocation form (used by ci_mon):"
+        echo "$0 <pw_instance> <cirrus_token> <pw_project>"
+        echo ""
+        echo "  NOTE: For the script invocation from, pw_project is currently"
+        echo "        ignored"
+        exit 0
+    elif ! echo "$1" | grep -q -s -E ^-- ; then
+        break
+    fi
+done
+
+if [ "X" = "X$pw_instance" -a "X$1" != "X" ]; then
+    pw_instance="$1"
+    shift
+fi
+
+if [ "X" = "X$cirrus_token" -a "X$1" != "X" ]; then
+    cirrus_token="$1"
+    shift
+fi
+
+if [ "X" = "X$pw_project" -a "X$1" != "X" ]; then
+    pw_project="$1"
+    shift
+fi
+
+if [ "X$cirrus_token" != "X" ]; then
+    AUTH="-H \"Authorization: Bearer $cirrus_token\""
+fi
+
+ci_instance="cirrus_sync"
+
+get_unsynced_series "$pw_instance" "$ci_instance" | \
+    while IFS="|" read -r series_id patch_id patch_url patch_name sha patchwork_instance patchwork_project repo_name gap_sync obs_sync cirrus_sync; do
+        repo_owner=$(echo "$repo_name" | cut -d/ -f1)
+        repo_real=$(echo "$repo_name" | cut -d/ -f2)
+
+        graph_string="{ \"query\": \"query BuildBySHAQuery(\$owner: String!, \$name: String!, \$SHA: String){ searchBuilds(repositoryOwner: \$owner, repositoryName: \$name, SHA: \$SHA) { id, status } }\", \"variables\": { \"owner\": \"$repo_owner\", \"name\": \"$repo_real\", \"SHA\": \"$sha\" } }"
+        build_details=$(curl -s -A "(pw-ci) cirrus_mon" $AUTH -X POST --data "$graph_string" https://api.cirrus-ci.com/graphql)
+
+        id=$(echo "$build_details" | jq -rc '.data.searchBuilds[-1].id')
+        status=$(echo "$build_details" | jq '.data.searchBuilds[-1].status')
+        build_url="https://cirrus-ci.com/build/$id"
+
+        result="in-progress"
+        if [ "$status" == "\"COMPLETED\"" ]; then
+            result="passed"
+        elif [ "$status" == "\"FAILED\"" ]; then
+            result="failed"
+        elif [ "$status" == "\"ABORTED\"" ]; then
+            set_synced_patch "$patch_id" "$patchwork_instance" "$ci_instance"
+            echo "CIRRUS patch_id=$patch_id belonging to series=$series_id on $patchwork_instance was aborted" 1>&2
+            continue
+        elif [ "$status" == "\"ERRORED\"" ]; then
+            result="warn"
+        fi
+
+        if [ "$result" == "in-progress" ]; then
+            echo "CIRRUS patch_id=$patch_id belonging to series=$series_id is not completed[$status]. Skipping" 1>&2
+            continue
+        fi
+
+        echo "pw|$pw_instance|build|$series_id|SHA|$sha|$result|$build_url|$patch_name|$repo_name|$test_name"
+done

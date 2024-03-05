@@ -140,13 +140,16 @@ if [ "X" = "X$pw_instance" ]; then
    exit 1
 fi
 
-for I in travis github obs dummy; do
+for I in travis github obs cirrus dummy; do
 
     token=${I}_token
     disable=disable_${I}
 
     if [ "X${!disable}" = "Xyes" ]; then
+        echo "Skiping ${I}"
         continue
+    else
+        echo "Scanning ${I}"
     fi
 
     ./${I}_mon $pw_instance ${!token} "$pw_project" | grep "^pw|" | while IFS="|" \
