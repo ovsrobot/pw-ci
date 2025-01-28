@@ -99,5 +99,7 @@ get_unsynced_series "$pw_instance" "$ci_instance" | \
             continue
         fi
 
+        set_synced_patch "$patch_id" "$patchwork_instance" "$ci_instance"
+
         echo "pw|$pw_instance|build|$series_id|SHA|$sha|$result|$build_url|$patch_name|$repo_name|$test_name"
 done
