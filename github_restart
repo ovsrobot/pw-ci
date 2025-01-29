@@ -55,6 +55,9 @@ while [ "$1" != "" ]; do
     elif echo "$1" | grep -q -s -E ^--workflow= ; then
         workflow=$(echo "$1" | sed s/^--workflow=//)
         shift
+    elif echo "$1" | grep -q -s -E ^--failed-ony ; then
+        failed_only=yes
+        shift
     elif echo "$1" | grep -q -s -E ^--help ; then
         echo "github restarting script"
         echo "$0: args"
@@ -99,6 +102,11 @@ fi
 AUTH="Authorization: token ${github_token}"
 APP="Accept: application/vnd.github.v3+json"
 
+rerunURL="rerun"
+if [ "X$failed_only" != "X" ]; then
+    rerunURL="rerun-failed-only"
+fi
+
 if [ "X$runid" == "X" ]; then
 
     # lookup the runs based on the shasum
@@ -129,7 +137,7 @@ comma=""
 for job in $(echo "$runid" | sed 's/,/ /'); do
     result=$(curl -A "(pw-ci) github-restart-${pw_project}" -s -X POST -L -S \
                   -H "${AUTH}" -H "${APP}" \
-                  "https://api.github.com/repos/${reponame}/actions/runs/$job/rerun")
+                  "https://api.github.com/repos/${reponame}/actions/runs/$job/$rerunURL")
     msg=$(echo "$result" | jq -rc '.message')
 
     echo -n "$comma{\"run\":$job,\"result\":"
