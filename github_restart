@@ -55,7 +55,7 @@ while [ "$1" != "" ]; do
     elif echo "$1" | grep -q -s -E ^--workflow= ; then
         workflow=$(echo "$1" | sed s/^--workflow=//)
         shift
-    elif echo "$1" | grep -q -s -E ^--failed-ony ; then
+    elif echo "$1" | grep -q -s -E ^--failed-only ; then
         failed_only=yes
         shift
     elif echo "$1" | grep -q -s -E ^--help ; then
