@@ -144,14 +144,21 @@ function check_new_series() {
     SINCE=$(echo $TRY_DATE | sed 's@ @%20@')
     STAMP=$(date --date="$STAMP_DATE" '+%C%y%m%d%H%M')
 
-    GET_URL="http://${INSTANCE}/api/series/?project=${PROJECT}&since=${SINCE}"
+    GET_URL="http://${INSTANCE}/api/events/?category=series-created&project=${PROJECT}&since=${SINCE}"
 
     response=$(curl -A "(pw-ci) pw-mon-${PROJECT}" -s "$userpw" "$GET_URL")
 
-    series_info=$(echo "$response" | jq -rc '.[] | (.id|tostring) + ";" + .url + ";" + .submitter.name + ";" + .submitter.email + ";" + (.received_all|tostring)')
+    series_info=$(echo "$response" | jq -rc '.[] | (.payload.series.id|tostring)')
 
     if [ "X$series_info" != "X" ]; then
-        echo "$series_info" | while IFS=\; read -r id url submitter_name submitter_email all; do
+        echo "$series_info" | while IFS=\; read -r id ; do
+
+            SERIES_JSON=$(curl -A "(pw-ci) pw-mon-${PROJECT}" -s "$userpw" "http://${INSTANCE}/api/series/${id}/")
+            url=$(echo "$SERIES_JSON" | jq -rc '.url')
+            submitter_name=$(echo "$SERIES_JSON" | jq -rc '.submitter.name')
+            submitter_email=$(echo "$SERIES_JSON" | jq -rc '.submitter.email')
+            all=$(echo "$SERIES_JSON" | jq -rc '.received_all|tostring')
+
             emit_series "${INSTANCE}" "${PROJECT}" "$id" "$url" "$submitter_name" "$submitter_email" "$all"
         done
     fi
