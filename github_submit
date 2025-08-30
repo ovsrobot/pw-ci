@@ -1,0 +1,160 @@
+#!/bin/bash
+# SPDX-Identifier: gpl-2.0-or-later
+# Copyright (C) 2025, Red Hat, Inc.
+#
+# Submits a pull request for github
+#
+# Licensed under the terms of the GNU General Public License as published
+# by the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.  You may obtain a copy of the
+# license at
+#
+#    https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[ -f "$(dirname $0)/series_db_lib.sh" ] && source "$(dirname $0)/series_db_lib.sh"
+[ -f "${HOME}/.github_actions_mon_rc" ] && source "${HOME}/.github_actions_mon_rc"
+[ -f "${HOME}/.pwmon-rc" ] && source "${HOME}/.pwmon-rc"
+
+verb=0
+
+while [ "$1" != "" ]; do
+    if echo $1 | grep ".*--github-token=" >/dev/null 2>/dev/null; then
+        ARG=`echo "$1" | sed 's@.*--github-token=@@'`
+        if [ "$ARG" != "$1" ]; then
+            github_token="$ARG"
+        fi
+    fi
+
+    if echo $1 | grep ".*--source-branch=" >/dev/null 2>/dev/null; then
+        ARG=`echo "$1" | sed 's@.*--source-branch=@@'`
+        if [ "$ARG" != "$1" ]; then
+            source_branch="$ARG"
+        fi
+    fi
+
+    if echo $1 | grep ".*--source-repo=" >/dev/null 2>/dev/null; then
+        ARG=`echo "$1" | sed 's@.*--source-repo=@@'`
+        if [ "$ARG" != "$1" ]; then
+            source_repo="$ARG"
+        fi
+    fi
+
+    if echo $1 | grep ".*--dest-branch=" >/dev/null 2>/dev/null; then
+        ARG=`echo "$1" | sed 's@.*--dest-branch=@@'`
+        if [ "$ARG" != "$1" ]; then
+            dest_branch="$ARG"
+        fi
+    fi
+
+    if echo $1 | grep ".*--dest-repo=" >/dev/null 2>/dev/null; then
+        ARG=`echo "$1" | sed 's@.*--dest-repo=@@'`
+        if [ "$ARG" != "$1" ]; then
+            dest_repo="$ARG"
+        fi
+    fi
+
+    if echo $1 | grep ".*--title=" >/dev/null 2>/dev/null; then
+        ARG=`echo "$1" | sed 's@.*--title=@@'`
+        if [ "$ARG" != "$1" ]; then
+            title="$ARG"
+        fi
+    fi
+
+    if echo $1 | grep ".*--body=" >/dev/null 2>/dev/null; then
+        ARG=`echo "$1" | sed 's@.*--body=@@'`
+        if [ "$ARG" != "$1" ]; then
+            body="$ARG"
+        fi
+    fi
+
+    if [ "$1" = "--verbose" ]; then
+        verb=1
+    fi
+
+    if [ "$1" == "--help" ]; then
+        echo "$0: Submit a github PR and update the series tracker"
+        echo "args:"
+        echo "--github-token=<TOKEN>                API Token for Github"
+        echo "--source-repo=<REPO>                  Repository for 'source'"
+        echo "--source-branch=<BRANCH>              Branch name on 'source'"
+        echo "--dest-repo=<REPO>                    Repository for 'dest'"
+        echo "--dest-branch=<BRANCH>                Branch name on 'dest'"
+        echo "--title=<TITLE>                       Title for PR (optional)"
+        echo "--body=<BODY>                         Body for PR (optional)"
+        echo "--verbose                             Print more details"
+        exit 0
+    fi
+
+    shift
+done
+
+if [ "X" = "X$github_token" ]; then
+    echo "ERROR: Must supply a github token.  See '--help'"
+    exit 1
+fi
+
+if [ "X" = "X$source_repo" ]; then
+    echo "ERROR: Must supply a source repo.  See '--help'"
+    exit 1
+fi
+
+if [ "X" = "X$source_branch" ]; then
+    echo "ERROR: Must supply a source branch.  See '--help'"
+    exit 1
+fi
+
+if [ "X" = "X$dest_repo" ]; then
+    echo "ERROR: Must supply a dest repo.  See '--help'"
+    exit 1
+fi
+
+if [ "X" = "X$dest_branch" ]; then
+    echo "ERROR: Must supply a dest branch.  See '--help'"
+    exit 1
+fi
+
+echo "PR: Opening ${source_repo}:${source_branch} -> ${dest_repo}:${dest_branch}"
+
+if [ "X" = "X$title" ]; then
+    title="Merge ${source_repo}:${source_branch} -> ${dest_repo}:${dest_branch}"
+fi
+
+if [ "X" = "X$body" ]; then
+    body="Automated PR from the PW-CI project.
+Merge ${source_repo}:${source_branch} -> ${dest_repo}:${dest_branch}"
+fi
+
+head_value="$source_branch"
+if [ "$source_repo" != "$dest_repo" ]; then
+    # Cross-repo PR requires owner:branch
+    head_value="${source_repo%/*}:${source_branch}"
+fi
+
+API_URL="https://api.github.com/repos/${dest_repo}/pulls"
+
+DATA=$(jq -n \
+          --arg title "$title" \
+          --arg head "${head_value}" \
+          --arg body "$body" \
+          --arg base "$dest_branch" \
+          '{title:$title, head:$head, base:$base, body:$body}')
+
+if [ "$verb" = "1" ]; then
+    echo "Submitting to $API_URL data: $DATA"
+fi
+
+curl -A "(pw-ci) github_submit" -s -X POST "$API_URL" \
+     -H "Authorization: token ${github_token}" \
+     -H "Accept: application/vnd.github.full+json" \
+     -d "$DATA"
+
+ret=$?
+
+echo "Submitted: ${ret}"
+exit $ret
