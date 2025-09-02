@@ -1,0 +1,167 @@
+#!/bin/bash
+# SPDX-Identifier: gpl-2.0-or-later
+# Copyright (C) 2025, Red Hat, Inc.
+#
+# After running the github results, this will create the pull request.
+#
+# Licensed under the terms of the GNU General Public License as published
+# by the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.  You may obtain a copy of the
+# license at
+#
+#    https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[ -f "$(dirname $0)/series_db_lib.sh" ] && source "$(dirname $0)/series_db_lib.sh"
+[ -f "${HOME}/.github_actions_mon_rc" ] && source "${HOME}/.github_actions_mon_rc"
+[ -f "${HOME}/.pwmon-rc" ] && source "${HOME}/.pwmon-rc"
+
+dry_run=0
+
+while [ "$1" != "" ]; do
+    if echo $1 | grep ".*--github-token=" >/dev/null 2>/dev/null; then
+        ARG=`echo "$1" | sed 's@.*--github-token=@@'`
+        if [ "$ARG" != "$1" ]; then
+            github_token="$ARG"
+        fi
+    fi
+
+    if echo $1 | grep ".*--dry-run" >/dev/null 2>/dev/null; then
+        dry_run=1
+    fi
+
+    if echo $1 | grep ".*--source-repo=" >/dev/null 2>/dev/null; then
+        ARG=`echo "$1" | sed 's@.*--source-repo=@@'`
+        if [ "$ARG" != "$1" ]; then
+            source_repo="$ARG"
+        fi
+    fi
+
+    if echo $1 | grep ".*--dest-branch=" >/dev/null 2>/dev/null; then
+        ARG=`echo "$1" | sed 's@.*--dest-branch=@@'`
+        if [ "$ARG" != "$1" ]; then
+            dest_branch="$ARG"
+        fi
+    fi
+
+    if echo $1 | grep ".*--dest-repo=" >/dev/null 2>/dev/null; then
+        ARG=`echo "$1" | sed 's@.*--dest-repo=@@'`
+        if [ "$ARG" != "$1" ]; then
+            dest_repo="$ARG"
+        fi
+    fi
+
+    if echo $1 | grep ".*--result=" >/dev/null 2>/dev/null; then
+        ARG=`echo "$1" | sed 's@.*--result=@@'`
+        if [ "$ARG" != "$1" ]; then
+            result="$ARG"
+        fi
+    fi
+
+    if echo $1 | grep ".*--series-id=" >/dev/null 2>/dev/null; then
+        ARG=`echo "$1" | sed 's@.*--series-id=@@'`
+        if [ "$ARG" != "$1" ]; then
+            series_id="$ARG"
+        fi
+    fi
+
+    if echo $1 | grep ".*--pw-instance=" >/dev/null 2>/dev/null; then
+        ARG=`echo "$1" | sed 's@.*--pw-instance=@@'`
+        if [ "$ARG" != "$1" ]; then
+            pw_instance="$ARG"
+        fi
+    fi
+
+    if echo $1 | grep ".*--patch-id=" >/dev/null 2>/dev/null; then
+        ARG=`echo "$1" | sed 's@.*--patch-id=@@'`
+        if [ "$ARG" != "$1" ]; then
+            patch_id="$ARG"
+        fi
+    fi
+
+    shift
+done
+
+# Check that all the pieces are present:
+if [ "X" = "X$github_token" ]; then
+    echo "ERROR: Must supply a github token.  See '--help'"
+    exit 1
+fi
+
+if [ "X" = "X$dest_repo" ]; then
+    echo "ERROR: Must supply a dest repo.  See '--help'"
+    exit 1
+fi
+
+if [ "X" = "X$source_repo" ]; then
+    echo "ERROR: Must supply a source repo.  See '--help'"
+    exit 1
+fi
+
+if [ "X" = "X$dest_branch" ]; then
+    echo "ERROR: Must supply a dest branch.  See '--help'"
+    exit 1
+fi
+
+if [ "X" = "X$series_id" ]; then
+    echo "ERROR: Must supply a dest branch.  See '--help'"
+    exit 1
+fi
+
+if [ "$result" != "passed" ]; then
+    # Do not open a PR in this case.
+    exit 0
+fi
+
+source_branch="series_$series_id"
+
+# Get the series details from patchwork:
+echo "Pulling: http://${pw_instance}/api/series/${series_id}/"
+SERIES_JSON=$(curl -s -A "(pw-ci) github_post_result" "http://${pw_instance}/api/series/${series_id}/")
+
+last_patch_id=$(echo $SERIES_JSON | jq '.patches[-1].id')
+
+if [ "X" = "X$patch_id" ]; then
+    patch_id=$last_patch_id
+fi
+
+if [ "$last_patch_id" != "$patch_id" ]; then
+    echo "Skipping PR for $patch_id != $last_patch_id."
+    exit 0
+fi
+
+series_title=$(echo $SERIES_JSON | jq .name)
+TITLE="[PWCI] $series_title"
+
+cover_letter=$(echo $SERIES_JSON | jq .cover_letter.mbox)
+web_url=$(echo $SERIES_JSON | jq .web_url)
+if [ "$cover_letter" = "null" ]; then
+    BODY="NOTE: This is an auto submission for $series_title.
+
+See $web_url for details.
+"
+else
+    mbox_text=$(curl -A "(pw-ci) github_post_result" "$cover_letter" | \
+                    awk 'BEGIN{body=0} /^$/ {body=1; next} body {print}')
+    BODY="Auto-submission for $web_url
+
+$mbox_text
+"
+fi
+
+# Got everything, time to post:
+if [ "$dry_run" = "0" ]; then
+    ./github_submit --body="$BODY" --title="$TITLE" --github-token="$github_token" \
+                    --source-branch="$source_branch" --source-repo="$source_repo" \
+                    --dest-branch="$dest_branch" --dest-repo="$dest_repo"
+else
+    echo "Would run:"
+    echo ./github_submit --body="$BODY" --title="$TITLE" --github-token="$github_token" \
+                    --source-branch="$source_branch" --source-repo="$source_repo" \
+                    --dest-branch="$dest_branch" --dest-repo="$dest_repo"
+fi

@@ -1,6 +1,6 @@
 #!/bin/bash
 # SPDX-Identifier: gpl-2.0-or-later
-# Copyright (C) 2021, Red Hat, Inc.
+# Copyright (C) 2021-2025, Red Hat, Inc.
 #
 # Generate and send a test-report email
 #
@@ -58,6 +58,8 @@ if [ '!' "X" = "X$*" ]; then
           echo "  --report-success=      String to report as success (default: SUCCESS)"
           echo "  --report-failure=      String to report as success (default: FAILURE)"
           echo "  --report-warning=      String to report as success (default: WARNING)"
+          echo "  --post-result=         Executable to run post-mail."
+          echo "  --post-result-extra=   Extra arguments for post-result."
 
           exit 0
       fi
@@ -124,6 +126,14 @@ if [ '!' "X" = "X$*" ]; then
           STRING=`echo "$1" | sed 's@.*--report-warning=@@'`
           RPT_WARNING="$STRING"
       fi
+      if echo "$1" | grep -- "--post-result=" >/dev/null 2>/dev/null; then
+          STRING=`echo "$1" | sed 's@.*--post-result=@@'`
+          POST_RESULT="$STRING"
+      fi
+      if echo "$1" | grep -- "--post-result-extra=" >/dev/null 2>/dev/null; then
+          STRING=`echo "$1" | sed 's@.*--post-result-extra=@@'`
+          POST_RESULT_EXTRA="$STRING"
+      fi
       shift
   done
 fi
@@ -162,7 +172,12 @@ for I in travis github obs cirrus dummy; do
         author=$(echo $SERIES_LINE | cut -d\| -f4)
         email=$(echo $SERIES_LINE | cut -d\| -f5)
 
-        PATCHDATA=$(curl -A "(pw-ci) ci-mon-${PROJECT}" -s $url)
+        if [ "Series $series_id not found for instance $pw_instance" != "$url" ]; then
+            PATCHDATA=$(curl -A "(pw-ci) ci-mon-${PROJECT}" -s $url)
+        else
+            echo "{\"message\": \"Bad series: $series_id on $ow_instance\"}"
+            continue
+        fi
 
         patch_id="$(get_patch_id_by_series_id_and_sha "$series_id" "$shasum" "$pw_chk_instance")"
         if [ "X$patch_id" == "X" ]; then
@@ -227,5 +242,8 @@ for I in travis github obs cirrus dummy; do
 
         git send-email $dry_run --suppress-from --to="$to_addr" $SENDCC report.eml
 
+        if [ "X" != "X$POST_RESULT" ]; then
+            ${POST_RESULT} $dry_run --result="${result}" --series-id="$series_id" --patch-id="$patch_id" --pw-instance="$pw_instance" --ci-type="${I}" ${POST_RESULT_EXTRA}
+        fi
     done
 done
