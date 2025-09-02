@@ -73,6 +73,13 @@ while [ "$1" != "" ]; do
         fi
     fi
 
+    if echo $1 | grep ".*--close=" >/dev/null 2>/dev/null; then
+        ARG=`echo "$1" | sed 's@.*--close=@@'`
+        if [ "$ARG" != "$1" ]; then
+            close="$ARG"
+        fi
+    fi
+
     if [ "$1" = "--verbose" ]; then
         verb=1
     fi
@@ -87,6 +94,7 @@ while [ "$1" != "" ]; do
         echo "--dest-branch=<BRANCH>                Branch name on 'dest'"
         echo "--title=<TITLE>                       Title for PR (optional)"
         echo "--body=<BODY>                         Body for PR (optional)"
+        echo "--close=<PR>                          PR to close"
         echo "--verbose                             Print more details"
         exit 0
     fi
@@ -99,27 +107,12 @@ if [ "X" = "X$github_token" ]; then
     exit 1
 fi
 
-if [ "X" = "X$source_repo" ]; then
-    echo "ERROR: Must supply a source repo.  See '--help'"
-    exit 1
-fi
-
-if [ "X" = "X$source_branch" ]; then
-    echo "ERROR: Must supply a source branch.  See '--help'"
-    exit 1
-fi
-
 if [ "X" = "X$dest_repo" ]; then
     echo "ERROR: Must supply a dest repo.  See '--help'"
     exit 1
 fi
 
-if [ "X" = "X$dest_branch" ]; then
-    echo "ERROR: Must supply a dest branch.  See '--help'"
-    exit 1
-fi
-
-echo "PR: Opening ${source_repo}:${source_branch} -> ${dest_repo}:${dest_branch}"
+echo "{\"message\":\"PR: Opening ${source_repo}:${source_branch} -> ${dest_repo}:${dest_branch}\"}"
 
 if [ "X" = "X$title" ]; then
     title="Merge ${source_repo}:${source_branch} -> ${dest_repo}:${dest_branch}"
@@ -138,15 +131,39 @@ fi
 
 API_URL="https://api.github.com/repos/${dest_repo}/pulls"
 
-DATA=$(jq -n \
-          --arg title "$title" \
-          --arg head "${head_value}" \
-          --arg body "$body" \
-          --arg base "$dest_branch" \
-          '{title:$title, head:$head, base:$base, body:$body}')
+if [ "X" == "X$close" ]; then
+    if [ "X" = "X$source_repo" ]; then
+        echo "ERROR: Must supply a source repo.  See '--help'"
+        exit 1
+    fi
+
+    if [ "X" = "X$source_branch" ]; then
+        echo "ERROR: Must supply a source branch.  See '--help'"
+        exit 1
+    fi
+
+    if [ "X" = "X$dest_branch" ]; then
+        echo "ERROR: Must supply a dest branch.  See '--help'"
+        exit 1
+    fi
+
+    DATA=$(jq -n \
+              --arg title "$title" \
+              --arg head "${head_value}" \
+              --arg body "$body" \
+              --arg base "$dest_branch" \
+              '{title:$title, head:$head, base:$base, body:$body}')
+else
+    API_URL="${API_URL}/${close}"
+
+    DATA=$(jq -n \
+              --arg state "closed" \
+              '{state:$state}')
+
+fi
 
 if [ "$verb" = "1" ]; then
-    echo "Submitting to $API_URL data: $DATA"
+    echo "{\"message\":\"Submitting to $API_URL data: $DATA\"}"
 fi
 
 curl -A "(pw-ci) github_submit" -s -X POST "$API_URL" \
@@ -156,5 +173,5 @@ curl -A "(pw-ci) github_submit" -s -X POST "$API_URL" \
 
 ret=$?
 
-echo "Submitted: ${ret}"
+echo "{\"Submitted\":\"${ret}\"}"
 exit $ret
