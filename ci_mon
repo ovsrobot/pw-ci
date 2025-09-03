@@ -247,6 +247,7 @@ for I in travis github obs cirrus dummy; do
 
             has_url=$(echo $POST_RESULT_OUTPUT | jq -rc 'select(.url != null) | .url')
             if [ "X$has_url" != "X" ]; then
+                html_url=$(echo $POST_RESULT_OUTPUT | jq -rc 'select(.html_url != null) | .html_url')
                 echo "(Post report URL: $has_url)"
                 echo "To: $to_addr" > report.eml
                 echo "From: $from_addr" >> report.eml
@@ -259,7 +260,12 @@ for I in travis github obs cirrus dummy; do
                 echo "Test-Status: $RPT_SUCCESS" >> report.eml
                 echo "$patch_url" >> report.eml
                 echo "" >> report.eml
-                echo "Post URL: $has_url" >> report.eml
+
+                if [ "X$html_url" != "X" ]; then
+                    echo "HTML Link: $html_url" >> report.eml
+                else
+                    echo "Submitted URL: $has_url" >> report.eml
+                fi
 
                 git send-email $dry_run --suppress-from --to="$to_addr" $SENDCC report.eml
             fi
