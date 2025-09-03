@@ -22,6 +22,7 @@
 [ -f "${HOME}/.pwmon-rc" ] && source "${HOME}/.pwmon-rc"
 
 dry_run=0
+verb=0
 
 while [ "$1" != "" ]; do
     if echo $1 | grep ".*--github-token=" >/dev/null 2>/dev/null; then
@@ -84,6 +85,9 @@ while [ "$1" != "" ]; do
         fi
     fi
 
+    if [ "$1" = "--verbose" ]; then
+        verb=1
+    fi
     shift
 done
 
@@ -121,7 +125,9 @@ fi
 source_branch="series_$series_id"
 
 # Get the series details from patchwork:
-echo "Pulling: http://${pw_instance}/api/series/${series_id}/"
+if [ "$verb" = "1" ]; then
+    echo "{\"message\":\"Pulling: http://${pw_instance}/api/series/${series_id}/\"}"
+fi
 SERIES_JSON=$(curl -s -A "(pw-ci) github_post_result" "http://${pw_instance}/api/series/${series_id}/")
 
 last_patch_id=$(echo $SERIES_JSON | jq '.patches[-1].id')
@@ -131,7 +137,7 @@ if [ "X" = "X$patch_id" ]; then
 fi
 
 if [ "$last_patch_id" != "$patch_id" ]; then
-    echo "Skipping PR for $patch_id != $last_patch_id."
+    echo "{\"message\":\"Skipping PR for $patch_id != $last_patch_id.\"}"
     exit 0
 fi
 
@@ -160,8 +166,9 @@ if [ "$dry_run" = "0" ]; then
                     --source-branch="$source_branch" --source-repo="$source_repo" \
                     --dest-branch="$dest_branch" --dest-repo="$dest_repo"
 else
-    echo "Would run:"
+    echo "{\"message\":\"Would run:"
     echo ./github_submit --body="$BODY" --title="$TITLE" --github-token="$github_token" \
                     --source-branch="$source_branch" --source-repo="$source_repo" \
                     --dest-branch="$dest_branch" --dest-repo="$dest_repo"
+    echo "\"}"
 fi
