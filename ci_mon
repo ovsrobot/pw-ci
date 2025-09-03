@@ -262,6 +262,7 @@ for I in travis github obs cirrus dummy; do
                 echo "Post URL: $has_url" >> report.eml
 
                 git send-email $dry_run --suppress-from --to="$to_addr" $SENDCC report.eml
+            fi
         fi
     done
 done
