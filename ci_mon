@@ -261,6 +261,7 @@ for I in travis github obs cirrus dummy; do
                 echo "$patch_url" >> report.eml
                 echo "" >> report.eml
 
+                echo "_${I} post: success_" >> report.eml
                 if [ "X$html_url" != "X" ]; then
                     echo "HTML Link: $html_url" >> report.eml
                 else
