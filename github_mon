@@ -86,8 +86,11 @@ make_result_for_series () {
 
         if [ "$result" == "success" ]; then
             result="passed"
-        else
+        elif [ "$result" == "failure" ]; then
             result="failed"
+        else
+            echo "patch_id=$patch_id belonging to series_id=$series_id got a workflow result $result" 1>&2
+            result="warning"
         fi
 
         test_name=$WORKFLOWNAME
