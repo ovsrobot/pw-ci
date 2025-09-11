@@ -59,30 +59,30 @@ make_result_for_series () {
     sha="$5"
     repo_name="$6"
 
-    # Get the name of each respective workflow
-    workflows="$(echo "$runs" | jq -r ".name" | sort -u)"
+    # Get the name of each respective workflow - for each entry pull name, and
+    # sort for a unique name.
+    workflows="$(echo "$runs" | jq -r ".[].name" | sort -u)"
+    headers="{name, status, conclusion, html_url, run_started_at, run_attempt}"
 
-    # Check that workflows have all completed
-    select="select(.head_branch==\"series_${series_id}\") | select(.head_sha==\"${sha}\")"
-    headers="{status, conclusion, html_url}"
-    run_meta="$(echo "$runs" | jq "$select | $headers")"
-
-    if [ "$(echo "$run_meta" | jq -r ".status" | sort -u)" != "completed" ]; then
-        echo "patch_id=$patch_id belonging to series_id=$series_id not completed. Skipping" 1>&2
-        return 2
-    fi
-
+    result_report=()
+    result_reports=0
     # Scan relevant data for each workflow
     echo "$workflows" | while IFS='\n' read -r WORKFLOWNAME; do
 
-        # Get run metadata
-        select="select(.head_sha==\"${sha}\") | select(.name==\"${WORKFLOWNAME}\")"
-        headers="{status, conclusion, html_url}"
-        run_meta="$(echo "$runs" | jq "$select | $headers")"
+        # Get run metadata for this shasum and workflow
+        select=".[] | select((.name==\"${WORKFLOWNAME}\") and .head_sha==\"${sha}\")"
+        run_meta="$(echo "$runs" | jq "$select | $headers" | jq -s '.[0]')"
 
         # success/failure?
         result="$(echo "$run_meta" | jq -r ".conclusion")"
+        finished=$(echo "$run_meta" | jq -r ".status")
         build_url="$(echo "$run_meta" | jq -r ".html_url")"
+
+        if [ "$status" != "completed" ]; then
+            # Need to skip these results - the workflow isn't ready
+            echo "patch_id=$patch_id belonging to series_id=$series_id not completed. Skipping" 1>&2
+            return 2
+        fi
 
         if [ "$result" == "success" ]; then
             result="passed"
@@ -92,9 +92,15 @@ make_result_for_series () {
 
         test_name=$WORKFLOWNAME
 
-        echo "pw|$pw_instance|build|$series_id|SHA|$sha|$result|$build_url|$patch_name|$repo_name|$test_name"
+        result_report+=("pw|$pw_instance|build|$series_id|SHA|$sha|$result|$build_url|$patch_name|$repo_name|$test_name")
+        ((result_reports++))
     done
 
+    counter=0
+    while [ $counter -lt $result_report ]; do
+        echo ${result_report[counter]}
+        ((counter++))
+    done
     set_synced_patch "$patch_id" "$pw_instance" "$ci_instance"
 }
 
@@ -120,8 +126,19 @@ while IFS="|" read -r series_id patch_id patch_url patch_name sha patchwork_inst
             all_runs="$(curl -A "(pw-ci) github-mon-${pw_project}" -s -S -H "${AUTH}" -H "${APP}" "${tmp_url}")"
         fi
 
-        runs=$(echo "$all_runs" | jq -rc ".workflow_runs[] | select(.head_branch == \"series_$series_id\")")
-        not_found="$(echo "$runs" | jq -rc ".message")"
+        # put all the runs grouped by their workflow name.  That way we have:
+        # [
+        #   {"id": 123457, "name": "Workflow 1", "node_id": "blah", ...},
+        #   {"id", 123456, "name": "Workflow 1", "node_id": "bar", ...},
+        #   {"id", 123459, "name": "Workflow 2", "node_id": "w/e", ...},
+        #   {"id", 123458, "name": "Workflow 2", "node_id": "w/e", ...},
+        # ]
+        # And the runs should be sorted by their run start time, so the newest
+        # runs should be in the [0] position.
+        # This means a select should be able to just get the names and choose
+        # the [0] element.
+        runs=$(echo "$all_runs" | jq -rc ".workflow_runs | sort_by(.run_started_at) | reverse | group_by(.name)[]")
+        not_found="$(echo "$runs" | jq -rc ".[].message")"
     fi
 
     if [ "$not_found" == "Not Found" ]; then
