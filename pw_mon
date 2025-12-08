@@ -46,6 +46,8 @@ fi
 
 recheck_filter=""
 
+proto="http"
+
 while [ "$1" != "" ]; do
     if echo "$1" | grep -q -s -E ^--pw-project= ; then
         pw_project=$(echo "$1" | sed s/^--pw-project=//)
@@ -71,6 +73,9 @@ while [ "$1" != "" ]; do
     elif echo "$1" | grep -q -s -E ^--add-filter-recheck=; then
         filter_str=$(echo "$1" | sed s/--add-filter-recheck=//)
         recheck_filter="$filter_str $recheck_filter"
+        shift
+    elif echo "$1" | grep -q -s -E '^--secure$'; then
+        proto="https"
         shift
     else
         echo "Unknown option: '$1'"
@@ -144,7 +149,7 @@ function check_new_series() {
     SINCE=$(echo $TRY_DATE | sed 's@ @%20@')
     STAMP=$(date --date="$STAMP_DATE" '+%C%y%m%d%H%M')
 
-    GET_URL="http://${INSTANCE}/api/events/?category=series-created&project=${PROJECT}&since=${SINCE}"
+    GET_URL="${proto}://${INSTANCE}/api/events/?category=series-created&project=${PROJECT}&since=${SINCE}"
 
     response=$(run_curl -A "(pw-ci) pw-mon-${PROJECT}" -s "$GET_URL")
 
@@ -152,7 +157,7 @@ function check_new_series() {
 
     if [ "X$series_info" != "X" ]; then
         echo "$series_info" | while IFS=\; read -r id ; do
-            SERIES_JSON=$(run_curl -A "(pw-ci) pw-mon-${PROJECT}" -s "http://${INSTANCE}/api/series/${id}/")
+            SERIES_JSON=$(run_curl -A "(pw-ci) pw-mon-${PROJECT}" -s "${proto}://${INSTANCE}/api/series/${id}/")
             url=$(echo "$SERIES_JSON" | jq -rc '.url')
             submitter_name=$(echo "$SERIES_JSON" | jq -rc '.submitter.name')
             submitter_email=$(echo "$SERIES_JSON" | jq -rc '.submitter.email')
@@ -256,7 +261,7 @@ function check_series_needs_retest() {
     local pw_instance="$1"
     local pw_project="$2"
 
-    local series_list=$(run_curl -A "(pw-ci) pw-mon-${PROJECT}" -s "http://${pw_instance}/api/series/?project=${pw_project}&state=new&state=rfc&state=under-review&archived=false&order=-id")
+    local series_list=$(run_curl -A "(pw-ci) pw-mon-${PROJECT}" -s "${proto}://${pw_instance}/api/series/?project=${pw_project}&state=new&state=rfc&state=under-review&archived=false&order=-id")
     local n=$(echo "$series_list" | jq -rc 'length')
 
     if [ "Xnull" == "X$n" -o "X" == "X$n" ]; then
