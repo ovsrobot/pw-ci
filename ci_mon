@@ -174,7 +174,7 @@ for I in travis github obs cirrus dummy; do
         email=$(echo $SERIES_LINE | cut -d\| -f5)
 
         if [ "Series $series_id not found for instance $pw_instance" != "$url" ]; then
-            PATCHDATA=$(curl -A "(pw-ci) ci-mon-${PROJECT}" -s $url)
+            PATCHDATA=$(run_curl -A "(pw-ci) ci-mon-${PROJECT}" -s $url)
         else
             echo "{\"message\": \"Bad series: $series_id on $ow_instance\"}"
             continue

@@ -15,6 +15,22 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+function run_curl() {
+    local default_opts=(
+        --fail
+        --retry 3
+        --connect-timeout 10
+        -L --location-trusted
+    )
+
+    [ "Xyes" == "$PWCI_DEBUG_CURL" ] && echo "[pwci] curl ${default_opts[@]} $*" >&2
+    if [ "X$userpw" != "X" ]; then
+        curl "${default_opts[@]}" "$userpw" "$@"
+    else
+        curl "${default_opts[@]}" "$@"
+    fi
+}
+
 function run_db_command() {
     echo "$@" | sqlite3 -cmd '.timeout 500000' ${HOME}/.series-db 2>/dev/null
 }

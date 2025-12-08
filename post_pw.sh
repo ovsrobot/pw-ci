@@ -54,7 +54,7 @@ send_post() {
         return 0
     fi
 
-    report="$(curl -A "(pw-ci) pw-post" -sSf "${link}")"
+    report="$(run_curl -A "(pw-ci) pw-post" -sSf "${link}")"
     if [ $? -ne 0 ]; then
         echo "Failed to get proper server response on link ${link}" 1>&2
         return 0
@@ -87,7 +87,7 @@ send_post() {
     fi
 
     # Get reports from patch
-    checks="$(curl -A "(pw-ci) pw-post" -sSf -X GET \
+    checks="$(run_curl -A "(pw-ci) pw-post" -sSf -X GET \
         --header "Content-Type: application/json" \
         "$api_url")"
     if [ $? -ne 0 ]; then
@@ -117,7 +117,7 @@ send_post() {
         \"description\": \"$description\"\
     }"
 
-    curl -A "(pw-ci) pw-post" -sSf -X POST \
+    run_curl -A "(pw-ci) pw-post" -sSf -X POST \
         -H "Authorization: Token ${token}" \
         --header "Content-Type: application/json" \
         --data "$data" \
@@ -137,7 +137,7 @@ send_post() {
 year_month="$(date +"%Y-%B")"
 
 # Get the last modified time
-report_last_mod=$(curl --head -A "(pw-ci) pw-post" -sSf "${mail_archive}${year_month}/thread.html" | grep -i Last-Modified)
+report_last_mod=$(run_curl --head -A "(pw-ci) pw-post" -sSf "${mail_archive}${year_month}/thread.html" | grep -i Last-Modified)
 
 mailing_list_save_file=$(echo ".post_pw_${mail_archive}${year_month}" | sed -e "s@/@_@g" -e "s@:@_@g" -e "s,@,_,g")
 
@@ -151,7 +151,7 @@ fi
 
 last_read_date="$report_last_mod"
 
-reports="$(curl -A "(pw-ci) pw-post" -sSf "${mail_archive}${year_month}/thread.html" | \
+reports="$(run_curl -A "(pw-ci) pw-post" -sSf "${mail_archive}${year_month}/thread.html" | \
          grep -i 'HREF=' | sed -e 's@[0-9]*<LI><A HREF="@\|@' -e 's@">@\|@')"
 if [ $? -ne 0 ]; then
     echo "Failed to get proper server response on link ${reports}" 1>&2

@@ -75,7 +75,7 @@ get_unsynced_series "$pw_instance" "$ci_instance" | \
         repo_real=$(echo "$repo_name" | cut -d/ -f2)
 
         graph_string="{ \"query\": \"query BuildBySHAQuery(\$owner: String!, \$name: String!, \$SHA: String){ searchBuilds(repositoryOwner: \$owner, repositoryName: \$name, SHA: \$SHA) { id, status } }\", \"variables\": { \"owner\": \"$repo_owner\", \"name\": \"$repo_real\", \"SHA\": \"$sha\" } }"
-        build_details=$(curl -s -A "(pw-ci) cirrus_mon" $AUTH -X POST --data "$graph_string" https://api.cirrus-ci.com/graphql)
+        build_details=$(run_curl -s -A "(pw-ci) cirrus_mon" $AUTH -X POST --data "$graph_string" https://api.cirrus-ci.com/graphql)
 
         id=$(echo "$build_details" | jq -rc '.data.searchBuilds[-1].id')
         status=$(echo "$build_details" | jq '.data.searchBuilds[-1].status')

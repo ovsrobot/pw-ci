@@ -79,13 +79,13 @@ SERIES_LINE=$(get_series_line "$pw_instance" "$pw_project" "$series_id")
 SERIES_URL=$(echo $SERIES_LINE | cut -d'|' -f1)
 
 echo "[*] Pulling series info ($SERIES_URL)..."
-series_info=$(curl -s -f "$SERIES_URL")
+series_info=$(run_curl -s -f "$SERIES_URL")
 
 COVER_LETTER_URL=$(echo "$series_info" | jq -rc '.cover_letter.url')
 if [ "$COVER_LETTER_URL" != "" -a "$COVER_LETTER_URL" != "null" -a "$pull_coverletter" == "yes" ]; then
     COVER_LETTER_MBOX=$(echo "$series_info" | jq -rc '.mbox')
     echo "[*] Pulling cover-letter ($COVER_LETTER_URL)..."
-    curl -s -f "$COVER_LETTER_MBOX" -o coverletter.mbox
+    run_curl -s -f "$COVER_LETTER_MBOX" -o coverletter.mbox
 fi
 
 PATCHES=$(echo "$series_info" | jq -rc '.patches[].url')
@@ -93,9 +93,9 @@ PATCHES=$(echo "$series_info" | jq -rc '.patches[].url')
 I=0
 for patch in $PATCHES; do
     echo "[*] Pulling patch ${I}..."
-    curl -s -f "$patch" -o ${I}.json
+    run_curl -s -f "$patch" -o ${I}.json
     PATCH_MBOX=$(jq -rc '.mbox' ${I}.json)
-    curl -s -f "$PATCH_MBOX" -o ${I}.mbox
+    run_curl -s -f "$PATCH_MBOX" -o ${I}.mbox
     I=$((I+1))
 done
 
