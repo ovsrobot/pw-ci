@@ -100,7 +100,7 @@ make_result_for_series () {
     done
 
     counter=0
-    while [ $counter -lt $result_report ]; do
+    while [ $counter -lt $result_reports ]; do
         echo ${result_report[counter]}
         ((counter++))
     done
