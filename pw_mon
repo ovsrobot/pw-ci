@@ -192,6 +192,7 @@ function check_completed_series() {
         if (( series_exp < current_date )) ; then
             echo "Need to expire - $id - too old."
             series_id_set_complete "$pw_instance" "$id"
+            series_id_set_submitted "$instance" "$id"
             series_clear_branch "$pw_instance" "$id"
             set_synced_for_series "$id" "$pw_instance"
             continue
@@ -213,6 +214,7 @@ function check_completed_series() {
             # Clear the job
             echo "Need to expire - $series_id - state."
             series_id_set_complete "$pw_instance" "$id"
+            series_id_set_submitted "$pw_instance" "$id"
             series_clear_branch "$pw_instance" "$id"
             set_synced_for_series "$id" "$pw_instance"
         fi
