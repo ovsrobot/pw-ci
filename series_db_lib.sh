@@ -204,14 +204,14 @@ function series_db_add_false() {
     local submitter_email="$6"
     local completed="$7"
 
-    echo "insert into series(series_id, series_project, series_url, series_submitter, series_email, series_submitted, series_completed, series_instance, series_downloaded) values (${id}, \"${project}\", \"${url}\", \"${submitter_name}\", \"${submitter_email}\", \"false\", \"${completed}\", \"${instance}\", \"0\");" | series_db_execute
+    echo "insert into series(series_id, series_project, series_url, series_submitter, series_email, series_submitted, series_completed, series_instance, series_downloaded) values (${id}, '${project}', '${url}', '${submitter_name}', '${submitter_email}', 'false', '${completed}', '${instance}', '0');" | series_db_execute
 }
 
 function series_id_exists() {
 
     series_db_exists
 
-    local CHECK_FOR_ID=$(echo "select series_id from series where series_id=${2} and series_instance=\"${1}\";" | series_db_execute)
+    local CHECK_FOR_ID=$(echo "select series_id from series where series_id=${2} and series_instance='${1}';" | series_db_execute)
 
     if [ "$CHECK_FOR_ID" != "" ]; then
         return 0
@@ -226,7 +226,7 @@ function get_unsubmitted_jobs_as_line() {
 
     series_db_exists
 
-    echo "select series_id,series_url,series_submitter,series_email from series where series_instance=\"$instance\" and series_project=\"$project\" and series_completed=\"1\" and series_submitted=\"false\";" | series_db_execute
+    echo "select series_id,series_url,series_submitter,series_email from series where series_instance='$instance' and series_project='$project' and series_completed='1' and series_submitted='false';" | series_db_execute
 }
 
 function get_uncompleted_jobs_as_line() {
@@ -235,7 +235,7 @@ function get_uncompleted_jobs_as_line() {
 
     series_db_exists
 
-    echo "select series_id,series_url,series_submitter,series_email from series where series_instance=\"$instance\" and series_project=\"$project\" and series_completed=\"0\" and series_submitted=\"false\" and series_downloaded=\"0\";" | series_db_execute
+    echo "select series_id,series_url,series_submitter,series_email from series where series_instance='$instance' and series_project='$project' and series_completed='0' and series_submitted='false' and series_downloaded='0';" | series_db_execute
 }
 
 function get_series_line() {
@@ -244,7 +244,7 @@ function get_series_line() {
 
     series_db_exists
 
-    echo "select series_url,series_submitter,series_email from series where series_id=\"$3\" and series_instance=\"$instance\";" | series_db_execute
+    echo "select series_url,series_submitter,series_email from series where series_id='$3' and series_instance='$instance';" | series_db_execute
 }
 
 function get_undownloaded_jobs_as_line() {
@@ -253,7 +253,7 @@ function get_undownloaded_jobs_as_line() {
 
     series_db_exists
 
-    echo "select series_id,series_url,series_submitter,series_email from series where series_instance=\"$instance\" and series_project=\"$project\" and series_completed=\"1\" and series_submitted=\"true\" and series_downloaded=\"1\";" | series_db_execute
+    echo "select series_id,series_url,series_submitter,series_email from series where series_instance='$instance' and series_project='$project' and series_completed='1' and series_submitted='true' and series_downloaded='1';" | series_db_execute
 }
 
 function series_id_set_submitted() {
@@ -264,7 +264,7 @@ function series_id_set_submitted() {
         return 0
     fi
 
-    echo "update series set series_submitted=\"true\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+    echo "update series set series_submitted='true' where series_id=$id and series_instance='$instance';" | series_db_execute
     return 0
 }
 
@@ -276,7 +276,7 @@ function series_id_clear_submitted() {
         return 0
     fi
     
-    echo "update series set series_submitted=\"false\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+    echo "update series set series_submitted='false' where series_id=$id and series_instance='$instance';" | series_db_execute
     return 0
 }
 
@@ -288,7 +288,7 @@ function series_id_set_complete() {
         return 0
     fi
 
-    echo "update series set series_completed=\"1\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+    echo "update series set series_completed='1' where series_id=$id and series_instance='$instance';" | series_db_execute
     return 0
 }
 
@@ -300,7 +300,7 @@ function series_id_set_downloading() {
         return 0
     fi
 
-    echo "update series set series_downloaded=\"1\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+    echo "update series set series_downloaded='1' where series_id=$id and series_instance='$instance';" | series_db_execute
 }
 
 function series_id_set_downloaded() {
@@ -313,7 +313,7 @@ function series_id_set_downloaded() {
 
     # Just in case we 'race' with the resubmit.  It shouldn't happen.
     series_id_set_submitted "$instance" "$id"
-    echo "update series set series_downloaded=\"2\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+    echo "update series set series_downloaded='2' where series_id=$id and series_instance='$instance';" | series_db_execute
 }
 
 function series_id_set_sha() {
@@ -324,7 +324,7 @@ function series_id_set_sha() {
         return 0
     fi
 
-    echo "update series set series_sha=\"$3\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+    echo "update series set series_sha='$3' where series_id=$id and series_instance='$instance';" | series_db_execute
 }
 
 function series_id_clear_downloaded() {
@@ -336,7 +336,7 @@ function series_id_clear_downloaded() {
     fi
 
     series_id_clear_submitted "$instance" "$id"
-    echo "update series set series_downloaded=\"0\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+    echo "update series set series_downloaded='0' where series_id=$id and series_instance='$instance';" | series_db_execute
 }
 
 function series_get_active_branches() {
@@ -344,7 +344,7 @@ function series_get_active_branches() {
 
     series_db_exists
 
-    echo "select series_id,series_project,series_url,series_branch,series_repo from series where series_instance=\"$instance\" and series_branch is not null and series_branch != \"\";" | series_db_execute
+    echo "select series_id,series_project,series_url,series_branch,series_repo from series where series_instance='$instance' and series_branch is not null and series_branch != '';" | series_db_execute
 }
 
 function series_activate_branch() {
@@ -353,21 +353,21 @@ function series_activate_branch() {
     local repo="$3"
     local branchname="$4"
 
-    echo "update series set series_branch=\"$branchname\",series_repo=\"$repo\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+    echo "update series set series_branch='$branchname',series_repo='$repo' where series_id=$id and series_instance='$instance';" | series_db_execute
 }
 
 function series_clear_branch() {
     local instance="$1"
     local id="$2"
 
-    echo "update series set series_branch=\"\" where series_id=$id and series_instance=\"$instance\";" | series_db_execute
+    echo "update series set series_branch='' where series_id=$id and series_instance='$instance';" | series_db_execute
 }
 
 function series_by_sha() {
     local instance="$1"
     local sha="$2"
 
-    echo "select series_url,series_submitter,series_email from series where series_sha=\"$sha\" and series_instance=\"$instance\";" | series_db_execute
+    echo "select series_url,series_submitter,series_email from series where series_sha='$sha' and series_instance='$instance';" | series_db_execute
 }
 
 function travis_add_sha() {
@@ -379,14 +379,14 @@ function travis_add_sha() {
     local travis_branch="$6"
     local patch_id="$7"
 
-    echo "insert into travis_build(pw_series_id,pw_series_instance,travis_api_server,travis_repo,travis_branch,travis_sha,pw_patch_url) values (${series_id}, \"${instance}\", \"${travis_api_server}\", \"${travis_repo}\", \"${travis_branch}\", \"${sha}\", \"${patch_id}\");" | series_db_execute
+    echo "insert into travis_build(pw_series_id,pw_series_instance,travis_api_server,travis_repo,travis_branch,travis_sha,pw_patch_url) values (${series_id}, '${instance}', '${travis_api_server}', '${travis_repo}', '${travis_branch}', '${sha}', '${patch_id}');" | series_db_execute
 }
 
 function patch_id_by_sha() {
     local instance="$1"
     local sha="$2"
 
-    echo "select patch_id from travis_build where pw_series_instance=\"$instance\" and travis_sha=\"$sha\";" | series_db_execute
+    echo "select patch_id from travis_build where pw_series_instance='$instance' and travis_sha='$sha';" | series_db_execute
 }
 
 function get_unsynced_series() {
@@ -395,7 +395,7 @@ function get_unsynced_series() {
 
     series_db_exists
 
-    echo "select * from git_builds where patchwork_instance=\"$instance\" and $ci_instance=0 order by series_id;" | series_db_execute
+    echo "select * from git_builds where patchwork_instance='$instance' and $ci_instance=0 order by series_id;" | series_db_execute
 }
 
 function set_synced_patch() {
@@ -405,7 +405,7 @@ function set_synced_patch() {
 
     series_db_exists
 
-    echo "update git_builds set $ci_instance=1 where patchwork_instance=\"$instance\" and patch_id=$patch_id;" | series_db_execute
+    echo "update git_builds set $ci_instance=1 where patchwork_instance='$instance' and patch_id=$patch_id;" | series_db_execute
 }
 
 function set_synced_for_series() {
@@ -415,7 +415,7 @@ function set_synced_for_series() {
 
     series_db_exists
 
-    echo "update git_builds set gap_sync=1, obs_sync=1, cirrus_sync=1 where patchwork_instance=\"$instance\" and series_id=$series_id;" | series_db_execute
+    echo "update git_builds set gap_sync=1, obs_sync=1, cirrus_sync=1 where patchwork_instance='$instance' and series_id=$series_id;" | series_db_execute
 }
 
 function set_unsynced_for_series() {
@@ -423,7 +423,7 @@ function set_unsynced_for_series() {
     local instance="$2"
     local ci_instance="$3"
 
-    echo "update git_builds set $ci_instance=0 where patchwork_instance=\"$instance\" and series_id=$series_id;" | series_db_execute
+    echo "update git_builds set $ci_instance=0 where patchwork_instance='$instance' and series_id=$series_id;" | series_db_execute
 }
 
 function insert_commit() {
@@ -438,7 +438,7 @@ function insert_commit() {
 
     series_db_exists
 
-    echo "INSERT INTO git_builds (series_id, patch_id, patch_url, patch_name, sha, patchwork_instance, patchwork_project, repo_name, gap_sync, obs_sync, cirrus_sync) VALUES($series_id, $patch_id, \"$patch_url\", \"$patch_name\", \"$sha\", \"$instance\", \"$project\", \"$repo_name\", 0, 0, 0);" | series_db_execute
+    echo "INSERT INTO git_builds (series_id, patch_id, patch_url, patch_name, sha, patchwork_instance, patchwork_project, repo_name, gap_sync, obs_sync, cirrus_sync) VALUES($series_id, $patch_id, '$patch_url', '$patch_name', '$sha', '$instance', '$project', '$repo_name', 0, 0, 0);" | series_db_execute
 }
 
 function get_patch_id_by_series_id_and_sha() {
@@ -448,7 +448,7 @@ function get_patch_id_by_series_id_and_sha() {
 
     series_db_exists
 
-    echo "select patch_id from git_builds where patchwork_instance=\"$instance\" and series_id=$series_id and sha=\"$sha\";" | series_db_execute
+    echo "select patch_id from git_builds where patchwork_instance='$instance' and series_id=$series_id and sha='$sha';" | series_db_execute
 }
 
 function get_sha_for_series_id_and_patch() {
@@ -456,7 +456,7 @@ function get_sha_for_series_id_and_patch() {
     local patch_id="$2"
     local instance="$3"
 
-    echo "select sha from git_builds where patchwork_instance=\"$instance\" and series_id=\"$series_id\" and patch_id=\"$patch_id\"" | series_db_execute
+    echo "select sha from git_builds where patchwork_instance='$instance' and series_id='$series_id' and patch_id='$patch_id'" | series_db_execute
 }
 
 function get_recheck_requests_by_project() {
@@ -467,7 +467,7 @@ function get_recheck_requests_by_project() {
 
     series_db_exists
 
-    echo "select recheck_message_id,recheck_series,recheck_patch from recheck_requests where patchwork_instance=\"$recheck_instance\" and patchwork_project=\"$recheck_project\" and recheck_sync=$recheck_state and recheck_requested_by=\"$recheck_requested_by\";" | series_db_execute
+    echo "select recheck_message_id,recheck_series,recheck_patch from recheck_requests where patchwork_instance='$recheck_instance' and patchwork_project='$recheck_project' and recheck_sync=$recheck_state and recheck_requested_by='$recheck_requested_by';" | series_db_execute
 }
 
 function insert_recheck_request_if_needed() {
@@ -478,8 +478,8 @@ function insert_recheck_request_if_needed() {
     local recheck_series="$5"
     local recheck_patch="$6"
 
-    if ! echo "select * from recheck_requests where recheck_message_id=\"$recheck_msgid\" and recheck_requested_by=\"$recheck_requested_by\";" | series_db_execute | grep $recheck_msgid >/dev/null 2>&1; then
-        echo "INSERT INTO recheck_requests (recheck_message_id, recheck_requested_by, recheck_series, recheck_patch, patchwork_instance, patchwork_project, recheck_sync) values (\"$recheck_msgid\", \"$recheck_requested_by\", \"$recheck_series\", $recheck_patch, \"$recheck_instance\", \"$recheck_project\", 0);" | series_db_execute
+    if ! echo "select * from recheck_requests where recheck_message_id='$recheck_msgid' and recheck_requested_by='$recheck_requested_by';" | series_db_execute | grep $recheck_msgid >/dev/null 2>&1; then
+        echo "INSERT INTO recheck_requests (recheck_message_id, recheck_requested_by, recheck_series, recheck_patch, patchwork_instance, patchwork_project, recheck_sync) values ('$recheck_msgid', '$recheck_requested_by', '$recheck_series', $recheck_patch, '$recheck_instance', '$recheck_project', 0);" | series_db_execute
     fi
 }
 
@@ -491,7 +491,7 @@ function get_recheck_request() {
     local recheck_series="$5"
     local recheck_state="$6"
 
-    echo "select * from recheck_requests where patchwork_instance=\"$recheck_instance\" and patchwork_project=\"$recheck_project\" and recheck_requested_by=\"$recheck_requested_by\" and recheck_series=\"$recheck_series\" and recheck_message_id=\"$recheck_msgid\" and recheck_sync=$recheck_state;" | series_db_execute
+    echo "select * from recheck_requests where patchwork_instance='$recheck_instance' and patchwork_project='$recheck_project' and recheck_requested_by='$recheck_requested_by' and recheck_series='$recheck_series' and recheck_message_id='$recheck_msgid' and recheck_sync=$recheck_state;" | series_db_execute
 }
 
 function set_recheck_request_state() {
@@ -502,19 +502,19 @@ function set_recheck_request_state() {
     local recheck_series="$5"
     local recheck_state="$6"
 
-    echo "UPDATE recheck_requests set recheck_sync=$recheck_state where patchwork_instance=\"$recheck_instance\" and patchwork_project=\"$recheck_project\" and recheck_requested_by=\"$recheck_requested_by\" and recheck_series=\"$recheck_series\";" | series_db_execute
+    echo "UPDATE recheck_requests set recheck_sync=$recheck_state where patchwork_instance='$recheck_instance' and patchwork_project='$recheck_project' and recheck_requested_by='$recheck_requested_by' and recheck_series='$recheck_series';" | series_db_execute
 }
 
 function add_check_scanned_url() {
     local patch_id="$1"
     local url="$2"
 
-    echo "INSERT into check_id_scanned (check_patch_id, check_url) values (${patch_id}, \"$url\");" | series_db_execute
+    echo "INSERT into check_id_scanned (check_patch_id, check_url) values (${patch_id}, '$url');" | series_db_execute
 }
 
 function check_id_exists() {
     local patch_id="$1"
     local url="$2"
 
-    echo "select * from check_id_scanned where check_patch_id=$patch_id and check_url=\"$url\";" | series_db_execute | grep "$url" >/dev/null 2>&1
+    echo "select * from check_id_scanned where check_patch_id=$patch_id and check_url='$url';" | series_db_execute | grep "$url" >/dev/null 2>&1
 }

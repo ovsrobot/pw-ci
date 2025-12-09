@@ -172,12 +172,51 @@ function check_new_series() {
 
 function check_completed_series() {
     get_uncompleted_jobs_as_line "$pw_instance" "$pw_project" | while IFS=\| read -r id url submitter_name submitter_email; do
-        echo "Checking on series: $id"
-        local RESPONSE=$(run_curl -A "(pw-ci) pw-mon-${PROJECT}" -s "$url" | jq -rc '.received_all')
+        echo "Checking on series: $id at $url"
+        local JSON=$(run_curl -A "(pw-ci) pw-mon-cc-${pw_project}" -s "$url")
+        local RESPONSE=$(echo "$JSON" | jq -rc '.received_all')
         if [ "$RESPONSE" = "true" ]; then
             echo "Setting series $id to completed"
             series_id_set_complete "$pw_instance" "$id"
         fi
+
+        # should it be expired based on being "too old"
+        # Note, we duplicate this check here because it won't be marked
+        # completed for the superseded check.
+        local current_date=$(date +%s)
+        local series_js_date=$(echo "$JSON" | jq -rc '.date')
+        local series_date=$(date -d "$series_js_date" +%s)
+        # 30 days in the future
+        local series_exp=$((series_date+86400))
+
+        if (( series_exp < current_date )) ; then
+            echo "Need to expire - $id - too old."
+            series_id_set_complete "$pw_instance" "$id"
+            series_clear_branch "$pw_instance" "$id"
+            set_synced_for_series "$id" "$pw_instance"
+            continue
+        fi
+
+        # Should it be superseded based on a patch detail:
+        local last_patch_url=$(echo "$JSON" | jq -rc '.patches[-1].url')
+        if [ "Xnull" == "X$last_patch_url" ]; then
+            echo "No patches (yet).  Bailing."
+            continue;
+        fi
+
+        local patch_state=$(run_curl -A "(pw-ci) pw-mon-ccp-${PROJECT}" -s "$last_patch_url" | jq -rc '.state')
+
+        # now check to see if the patch should even be reported...
+        # This is for series that should be expired this way.
+        if [ "$patch_state" = "superseded" -o "$patch_state" = "rejected" -o "$patch_state" = "accepted" \
+             -o "$patch_state" = "changes-requested" -o "$patch_state" = "not-applicable" ]; then
+            # Clear the job
+            echo "Need to expire - $series_id - state."
+            series_id_set_complete "$pw_instance" "$id"
+            series_clear_branch "$pw_instance" "$id"
+            set_synced_for_series "$id" "$pw_instance"
+        fi
+
     done
     return 0
 }
@@ -193,13 +232,29 @@ function check_undownloaded_series() {
 function check_superseded_series() {
     local pw_instance="$1"
     series_get_active_branches "$pw_instance" | while IFS=\| read -r series_id project url repo branchname; do
+        # Get the series json
+        local JSON=$(run_curl -A "(pw-ci) pw-mon-cs-${PROJECT}" -s "$url")
         # first query the patch states
-        local last_patch_url=$(run_curl -A "(pw-ci) pw-mon-${PROJECT}" -s "$url" | jq -rc '.patches[-1].url')
-        local patch_state=$(run_curl -A "(pw-ci) pw-mon-${PROJECT}" -s "$last_patch_url" | jq -rc '.state')
+        local last_patch_url=$(echo "$JSON" | jq -rc '.patches[-1].url')
+        local patch_state=$(run_curl -A "(pw-ci) pw-mon-csp-${PROJECT}" -s "$last_patch_url" | jq -rc '.state')
 
         # now check to see if the patch should even be reported...
         if [ "$patch_state" = "superseded" -o "$patch_state" = "rejected" -o "$patch_state" = "accepted" \
              -o "$patch_state" = "changes-requested" -o "$patch_state" = "not-applicable" ]; then
+            echo "Need to blank series - $series_id - too old."
+            series_clear_branch "$pw_instance" "$series_id"
+            set_synced_for_series "$series_id" "$pw_instance"
+        fi
+
+        # should it be expired based on being "too old"
+        local current_date=$(date +%s)
+        local series_js_date=$(echo "$JSON" | jq -rc '.date')
+        local series_date=$(date -d "$series_js_date" +%s)
+        # 30 days in the future
+        local series_exp=$((series_date+86400))
+
+        if (( series_exp < current_date )) ; then
+            echo "Need to expire - $series_id - too old."
             series_clear_branch "$pw_instance" "$series_id"
             set_synced_for_series "$series_id" "$pw_instance"
         fi
