@@ -101,7 +101,7 @@ make_result_for_series () {
 
     counter=0
     while [ $counter -lt $result_reports ]; do
-        echo ${result_report[counter]}
+        echo ${result_report[$counter]}
         ((counter++))
     done
     set_synced_patch "$patch_id" "$pw_instance" "$ci_instance"
