@@ -301,7 +301,7 @@ function check_patch_for_retest_request() {
     if [ "Xnull" != "X$patch_comments_url" ]; then
         local comments_json=$(run_curl -A "(pw-ci) pw-mon-${PROJECT}" -s "$patch_comments_url")
         local seq_end=$(echo "$comments_json" | jq -rc 'length')
-        if echo "$seq_end" | grep -E "^[0-9]+$" && [ $seq_end -gt 0 ]; then
+        if echo "$seq_end" | grep -E "^[0-9]+$" >/dev/null && [ $seq_end -gt 0 ]; then
             seq_end=$((seq_end-1))
             for comment_id in $(seq 0 $seq_end); do
                 local recheck_requested=$(echo "$comments_json" | jq -rc ".[$comment_id].content" | grep "^Recheck-request: ")
