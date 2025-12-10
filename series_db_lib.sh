@@ -191,7 +191,8 @@ function series_db_execute() {
             NOTDONE="true"
             series_db_exists
         fi
-        run_db_command "$command"
+        [ "Xyes" != "X$DRY_DB" ] && run_db_command "$command"
+        [ "Xyes" == "X$DRY_DB" ] && echo "cmd: [ $command ]"
     done
 }
 
@@ -200,11 +201,11 @@ function series_db_add_false() {
     local project="$2"
     local id="$3"
     local url="$4"
-    local submitter_name="$5"
-    local submitter_email="$6"
+    local submitter_name=$(echo "$5" | sed "s@'@''@g")
+    local submitter_email=$(echo "$6" | sed "s@'@''@g")
     local completed="$7"
 
-    echo "insert into series(series_id, series_project, series_url, series_submitter, series_email, series_submitted, series_completed, series_instance, series_downloaded) values (${id}, '${project}', '${url}', '${submitter_name}', '${submitter_email}', 'false', '${completed}', '${instance}', '0');" | series_db_execute
+    echo "insert into series(\"series_id\", \"series_project\", \"series_url\", \"series_submitter\", \"series_email\", \"series_submitted\", \"series_completed\", \"series_instance\", \"series_downloaded\") values (${id}, '${project}', '${url}', '${submitter_name}', '${submitter_email}', 'false', '${completed}', '${instance}', '0');" | series_db_execute
 }
 
 function series_id_exists() {
@@ -430,7 +431,7 @@ function insert_commit() {
     local series_id="$1"
     local patch_id="$2"
     local patch_url="$3"
-    local patch_name="$4"
+    local patch_name=$(echo "$4" | sed "s@'@''@g")
     local sha="$5"
     local instance="$6"
     local project="$7"
@@ -474,7 +475,7 @@ function insert_recheck_request_if_needed() {
     local recheck_instance="$1"
     local recheck_project="$2"
     local recheck_msgid="$3"
-    local recheck_requested_by="$4"
+    local recheck_requested_by=$(echo "$4" | sed "s@'@''@g")
     local recheck_series="$5"
     local recheck_patch="$6"
 
@@ -487,7 +488,7 @@ function get_recheck_request() {
     local recheck_instance="$1"
     local recheck_project="$2"
     local recheck_msgid="$3"
-    local recheck_requested_by="$4"
+    local recheck_requested_by=$(echo "$4" | sed "s@'@''@g")
     local recheck_series="$5"
     local recheck_state="$6"
 
@@ -498,7 +499,7 @@ function set_recheck_request_state() {
     local recheck_instance="$1"
     local recheck_project="$2"
     local recheck_msgid="$3"
-    local recheck_requested_by="$4"
+    local recheck_requested_by=$(echo "$4" | sed "s@'@''@g")
     local recheck_series="$5"
     local recheck_state="$6"
 
