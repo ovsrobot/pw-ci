@@ -57,4 +57,4 @@ if [ "X$series_branch" != "X" ]; then
 else
     series_clear_branch "$pw_instance" "$series_id"
 fi
-return 0
+exit 0
