@@ -67,7 +67,7 @@ make_result_for_series () {
     result_report=()
     result_reports=0
     # Scan relevant data for each workflow
-    echo "$workflows" | while IFS='\n' read -r WORKFLOWNAME; do
+    while IFS='\n' read -r WORKFLOWNAME; do
 
         # Get run metadata for this shasum and workflow
         select=".[] | select((.name==\"${WORKFLOWNAME}\") and .head_sha==\"${sha}\")"
@@ -75,7 +75,7 @@ make_result_for_series () {
 
         # success/failure?
         result="$(echo "$run_meta" | jq -r ".conclusion")"
-        finished=$(echo "$run_meta" | jq -r ".status")
+        status=$(echo "$run_meta" | jq -r ".status")
         build_url="$(echo "$run_meta" | jq -r ".html_url")"
 
         if [ "$status" != "completed" ]; then
@@ -97,17 +97,15 @@ make_result_for_series () {
 
         result_report+=("pw|$pw_instance|build|$series_id|SHA|$sha|$result|$build_url|$patch_name|$repo_name|$test_name")
         ((result_reports++))
-    done
+    done <<< "$workflows"
 
-    if [ $? -ne 2 ]; then
-        counter=0
-        while [ $counter -lt $result_reports ]; do
-            echo ${result_report[$counter]}
-            ((counter++))
-        done
-        if [ $counter -gt 0 ]; then
-            set_synced_patch "$patch_id" "$pw_instance" "$ci_instance"
-        fi
+    counter=0
+    while [ $counter -lt $result_reports ]; do
+        echo ${result_report[$counter]}
+        ((counter++))
+    done
+    if [ $counter -gt 0 ]; then
+        set_synced_patch "$patch_id" "$pw_instance" "$ci_instance"
     fi
 }
 
@@ -116,7 +114,6 @@ prev_series=""
 prev_url=""
 all_runs=""
 
-get_unsynced_series "$pw_instance" "$ci_instance" | \
 while IFS="|" read -r series_id patch_id patch_url patch_name sha patchwork_instance patchwork_project repo_name gap_sync; do
 
     if [ "X$pw_project" != "X" -a "X$pw_project" != "X$patchwork_project" ]; then
@@ -159,4 +156,4 @@ while IFS="|" read -r series_id patch_id patch_url patch_name sha patchwork_inst
     fi
 
     make_result_for_series "$series_id" "$patch_id" "$patch_url" "$patch_name" "$sha" "$repo_name"
-done
+done < <(get_unsynced_series "$pw_instance" "$ci_instance")
