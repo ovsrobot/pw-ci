@@ -80,7 +80,7 @@ make_result_for_series () {
 
         if [ "$status" != "completed" ]; then
             # Need to skip these results - the workflow isn't ready
-            echo "patch_id=$patch_id belonging to series_id=$series_id not completed. Skipping" 1>&2
+            echo "patch_id=$patch_id belonging to series_id=$series_id not completed ($status). Skipping" 1>&2
             return 2
         fi
 
@@ -99,12 +99,16 @@ make_result_for_series () {
         ((result_reports++))
     done
 
-    counter=0
-    while [ $counter -lt $result_reports ]; do
-        echo ${result_report[$counter]}
-        ((counter++))
-    done
-    set_synced_patch "$patch_id" "$pw_instance" "$ci_instance"
+    if [ $? -ne 2 ]; then
+        counter=0
+        while [ $counter -lt $result_reports ]; do
+            echo ${result_report[$counter]}
+            ((counter++))
+        done
+        if [ $counter -gt 0 ]; then
+            set_synced_patch "$patch_id" "$pw_instance" "$ci_instance"
+        fi
+    fi
 }
 
 prev_series=""
