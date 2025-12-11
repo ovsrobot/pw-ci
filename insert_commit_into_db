@@ -69,3 +69,4 @@ fi
 patch_name=$(echo "$patch_name" | sed 's@"@""@g')
 
 insert_commit "$series_id" "$patch_id" "$patch_url" "$patch_name" "$sha" "$pw_instance" "$project" "$repo_name"
+return 0

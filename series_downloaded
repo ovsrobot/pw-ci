@@ -63,3 +63,5 @@ else
     echo "STATUS: downloaded"
     series_id_set_downloaded "$pw_instance" "$series_id"
 fi
+
+echo "Status Updated - $START"
