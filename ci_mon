@@ -243,7 +243,7 @@ for I in travis github obs cirrus dummy; do
         git send-email $dry_run --suppress-from --to="$to_addr" $SENDCC report.eml
 
         if test "Xno" != "X$POST_RESULT" -a -f "${I}_post_result_submit" ; then
-            POST_RESULT_OUTPUT=$(${I}_post_result_submit $dry_run --result="${result}" --series-id="$series_id" --patch-id="$patch_id" --pw-instance="$pw_instance" --ci-type="${I}" ${POST_RESULT_EXTRA})
+            POST_RESULT_OUTPUT=$(./${I}_post_result_submit $dry_run --result="${result}" --series-id="$series_id" --patch-id="$patch_id" --pw-instance="$pw_instance" --ci-type="${I}" ${POST_RESULT_EXTRA})
 
             has_url=$(echo $POST_RESULT_OUTPUT | jq -rc 'select(.url != null) | .url')
             if [ "X$has_url" != "X" ]; then
