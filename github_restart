@@ -47,7 +47,7 @@ while [ "$1" != "" ]; do
         reponame=$(echo "$1" | sed s/^--repository=//)
         shift
     elif echo "$1" | grep -q -s -E ^--run-id= ; then
-        runid=$(echo "$1" | sed s/^--repository=//)
+        runid=$(echo "$1" | sed s/^--run-id=//)
         shift
     elif echo "$1" | grep -q -s -E ^--sha= ; then
         sha=$(echo "$1" | sed s/^--sha=//)
