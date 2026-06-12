@@ -127,7 +127,7 @@ if [ "X$runid" == "X" ]; then
                       "https://api.github.com/repos/${reponame}/actions/runs?head_sha=${sha}" | \
                      jq -rc ".workflow_runs[] ${workflow_select} .id")
     do
-        runid="${comma}${job}"
+        runid="${runid}${comma}${job}"
         comma=","
     done
 fi
