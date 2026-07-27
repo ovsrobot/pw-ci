@@ -152,6 +152,12 @@ function check_new_series() {
     GET_URL="${proto}://${INSTANCE}/api/events/?category=series-created&project=${PROJECT}&since=${SINCE}"
 
     response=$(run_curl -A "(pw-ci) pw-mon-${PROJECT}" -s "$GET_URL")
+    local curl_rc=$?
+
+    if [ $curl_rc -ne 0 ]; then
+        echo "WARN: request failure (rc=$curl_rc) fetching $GET_URL - skipping series check."
+        return 1
+    fi
 
     series_info=$(echo "$response" | jq -rc '.[] | (.payload.series.id|tostring)')
 
