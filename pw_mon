@@ -164,6 +164,14 @@ function check_new_series() {
     if [ "X$series_info" != "X" ]; then
         echo "$series_info" | while IFS=\; read -r id ; do
             SERIES_JSON=$(run_curl -A "(pw-ci) pw-mon-${PROJECT}" -s "${proto}://${INSTANCE}/api/series/${id}/")
+            if [ $? -ne 0 ]; then
+                echo "WARN: Failed to fetch details for series $id, recording for retry"
+                if ! series_id_exists "${INSTANCE}" "${id}"; then
+                    series_db_add_false "${INSTANCE}" "${PROJECT}" "${id}" \
+                        "${proto}://${INSTANCE}/api/series/${id}/" "" "" "0"
+                fi
+                continue
+            fi
             url=$(echo "$SERIES_JSON" | jq -rc '.url')
             submitter_name=$(echo "$SERIES_JSON" | jq -rc '.submitter.name')
             submitter_email=$(echo "$SERIES_JSON" | jq -rc '.submitter.email')
@@ -176,8 +184,43 @@ function check_new_series() {
     touch -m -t "${STAMP}" "${HOME}/.pwmon-${INSTANCE}-${PROJECT}-series"
 }
 
+function check_pending_details_series() {
+    local pw_instance="$1"
+    local pw_project="$2"
+
+    get_pending_details_jobs_as_line "$pw_instance" "$pw_project" | while IFS=\| read -r id url; do
+        echo "Re-fetching details for series: $id"
+        local JSON=$(run_curl -A "(pw-ci) pw-mon-${pw_project}" -s "$url")
+        if [ $? -ne 0 ]; then
+            echo "WARN: Failed to fetch details for series $id, will retry next run"
+            continue
+        fi
+        local series_url=$(echo "$JSON" | jq -rc '.url')
+        local submitter_name=$(echo "$JSON" | jq -rc '.submitter.name')
+        local submitter_email=$(echo "$JSON" | jq -rc '.submitter.email')
+        local all=$(echo "$JSON" | jq -rc '.received_all|tostring')
+        local completed=0
+        [ "$all" = "true" ] && completed=1
+
+        series_update_details "$pw_instance" "$id" "$series_url" "$submitter_name" "$submitter_email" "$completed"
+
+        echo "============================================="
+        echo "Series instance: $pw_instance"
+        echo "Series id:       $id"
+        echo "Series url:      $series_url"
+        echo "submitter:       $submitter_name <$submitter_email>"
+        echo "all:             $all"
+        echo "recording series (${id}, \"${series_url}\", \"${submitter_name}\", \"${submitter_email}\")"
+        echo
+    done
+}
+
 function check_completed_series() {
     get_uncompleted_jobs_as_line "$pw_instance" "$pw_project" | while IFS=\| read -r id url submitter_name submitter_email; do
+        if [ -z "$submitter_name" ] && [ -z "$submitter_email" ]; then
+            echo "Skipping series $id - details pending retry"
+            continue
+        fi
         echo "Checking on series: $id at $url"
         local JSON=$(run_curl -A "(pw-ci) pw-mon-cc-${pw_project}" -s "$url")
         local RESPONSE=$(echo "$JSON" | jq -rc '.received_all')
@@ -351,6 +394,7 @@ function check_series_needs_retest() {
     done
 }
 
+check_pending_details_series "$pw_instance" "$pw_project"
 check_undownloaded_series "$pw_instance" "$pw_project"
 check_completed_series "$pw_instance" "$pw_project"
 check_new_series "$pw_instance" "$pw_project"
