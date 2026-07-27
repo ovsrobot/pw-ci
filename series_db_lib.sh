@@ -20,6 +20,7 @@ function run_curl() {
         --fail
         --retry 3
         --connect-timeout 10
+        --max-time 180
         -L --location-trusted
     )
 
@@ -301,7 +302,7 @@ function series_id_set_downloading() {
         return 0
     fi
 
-    echo "update series set \"series_downloaded\"=1 where \"series_id\"=$id and \"series_instance\"='$instance';" | series_db_execute
+    echo "update series set \"series_downloaded\"=1 where \"series_id\"=${id} and \"series_instance\"='$instance';" | series_db_execute
 }
 
 function series_id_set_downloaded() {
@@ -504,6 +505,26 @@ function set_recheck_request_state() {
     local recheck_state="$6"
 
     echo "UPDATE recheck_requests set \"recheck_sync\"=$recheck_state where \"patchwork_instance\"='$recheck_instance' and \"patchwork_project\"='$recheck_project' and \"recheck_requested_by\"='$recheck_requested_by' and \"recheck_series\"='$recheck_series';" | series_db_execute
+}
+
+function get_pending_details_jobs_as_line() {
+    local instance="$1"
+    local project="$2"
+
+    series_db_exists
+
+    echo "select \"series_id\",\"series_url\" from series where \"series_instance\"='$instance' and \"series_project\"='$project' and \"series_submitter\"='' and \"series_email\"='';" | series_db_execute
+}
+
+function series_update_details() {
+    local instance="$1"
+    local id="$2"
+    local url="$3"
+    local submitter_name=$(echo "$4" | sed "s@'@''@g")
+    local submitter_email=$(echo "$5" | sed "s@'@''@g")
+    local completed="$6"
+
+    echo "update series set \"series_url\"='$url', \"series_submitter\"='$submitter_name', \"series_email\"='$submitter_email', \"series_completed\"=$completed where \"series_id\"=$id and \"series_instance\"='$instance';" | series_db_execute
 }
 
 function add_check_scanned_url() {
